@@ -90,6 +90,12 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const {
+      title,
+      description,
+      category,
+      fee,
+      city,
+      district,
       status,
       assignedToId,
       assignedToName,
@@ -110,6 +116,12 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {};
 
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (category) updateData.category = category;
+    if (fee !== undefined && !isNaN(Number(fee))) updateData.fee = Number(fee);
+    if (city) updateData.city = city;
+    if (district !== undefined) updateData.district = district;
     if (status) updateData.status = status;
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId;
     if (assignedToName !== undefined) updateData.assignedToName = assignedToName;
@@ -287,6 +299,54 @@ export async function PATCH(
     console.error("Task PATCH error:", error);
     return NextResponse.json(
       { success: false, message: "Görev güncellenirken hata oluştu" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const task = await db.task.findUnique({ where: { id } });
+
+    if (!task) {
+      return NextResponse.json(
+        { success: false, message: "Görev bulunamadı" },
+        { status: 404 }
+      );
+    }
+
+    // Refund escrow balance to requester if task was active
+    if (task.status !== "completed" && task.status !== "cancelled" && task.requesterId) {
+      await db.user
+        .update({
+          where: { id: task.requesterId },
+          data: {
+            escrowBalance: { decrement: task.fee },
+            walletBalance: { increment: task.fee },
+          },
+        })
+        .catch(() => {});
+    }
+
+    // Delete associated bids and messages
+    await db.bid.deleteMany({ where: { taskId: id } }).catch(() => {});
+    await db.message.deleteMany({ where: { taskId: id } }).catch(() => {});
+
+    // Delete task itself
+    await db.task.delete({ where: { id } });
+
+    return NextResponse.json({
+      success: true,
+      message: "Görev başarıyla silindi",
+    });
+  } catch (error) {
+    console.error("Task DELETE error:", error);
+    return NextResponse.json(
+      { success: false, message: "Görev silinirken hata oluştu" },
       { status: 500 }
     );
   }

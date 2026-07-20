@@ -27,6 +27,9 @@ import {
   Award,
   Zap,
   Info,
+  Trash2,
+  Edit3,
+  Save,
 } from 'lucide-react';
 import { getUserBadges } from '@/lib/badges';
 import { showMobileNotificationCard } from '@/lib/audioNotification';
@@ -98,6 +101,17 @@ export default function TaskDetailModal() {
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
+
+  // Admin Edit & Delete states
+  const [adminEditMode, setAdminEditMode] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editFee, setEditFee] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -628,17 +642,84 @@ export default function TaskDetailModal() {
     }
   };
 
+  const handleDeleteTask = async () => {
+    if (!task) return;
+    if (!window.confirm(`"${task.title}" görevini silmek istediğinize emin misiniz?`)) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Görev başarıyla silindi');
+        addLog(`Admin görevi sildi: ${task.title}`);
+        handleClose();
+        refetchTasks();
+      } else {
+        toast.error(data.message || 'Görev silinemedi');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleStartAdminEdit = () => {
+    if (!displayTask) return;
+    setEditTitle(displayTask.title);
+    setEditFee(String(displayTask.fee));
+    setEditCategory(displayTask.category);
+    setEditCity(displayTask.city);
+    setEditDesc(displayTask.description);
+    setEditStatus(displayTask.status);
+    setAdminEditMode(true);
+  };
+
+  const handleSaveAdminEdit = async () => {
+    if (!task) return;
+    setEditLoading(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          fee: Number(editFee),
+          category: editCategory,
+          city: editCity,
+          description: editDesc,
+          status: editStatus,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Görev bilgileri güncellendi');
+        addLog(`Admin görevi güncelledi: ${editTitle}`);
+        setAdminEditMode(false);
+        fetchTaskDetail();
+        refetchTasks();
+      } else {
+        toast.error(data.message || 'Güncelleme başarısız');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   if (!task) return null;
 
   const isRequester = currentUser?.id === task.requesterId;
   const isAssignee = currentUser?.id === task.assignedToId;
+  const isAdmin = currentUser?.role === 'admin';
   const displayTask = fullTask || task;
 
   return (
     <Dialog open={!!task} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
-        <DialogHeader className="p-5 pb-3">
-          <div className="flex items-start justify-between gap-3">
+        <DialogHeader className="p-5 pb-3 border-b dark:border-white/10">
+          <div className="flex items-start justify-between gap-3 pr-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <Badge variant={statusMap[displayTask.status]?.variant || 'secondary'} className="text-[11px]">
@@ -647,12 +728,73 @@ export default function TaskDetailModal() {
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                   {displayTask.category}
                 </span>
+
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    {!adminEditMode ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-blue-500 text-blue-600 dark:text-blue-400 gap-1 px-2.5 font-bold"
+                        onClick={handleStartAdminEdit}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Düzenle
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 px-2.5 font-bold"
+                        onClick={handleSaveAdminEdit}
+                        disabled={editLoading}
+                      >
+                        {editLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Kaydet
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-xs gap-1 px-2.5 font-bold"
+                      onClick={handleDeleteTask}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Sil
+                    </Button>
+                  </div>
+                )}
               </div>
-              <DialogTitle className="text-lg leading-snug">{displayTask.title}</DialogTitle>
+
+              {!adminEditMode ? (
+                <DialogTitle className="text-lg leading-snug">{displayTask.title}</DialogTitle>
+              ) : (
+                <div className="space-y-2 mt-2 bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Admin Düzenleme Modu</p>
+                  <input
+                    className="w-full text-sm font-semibold p-1.5 rounded border bg-background"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Görev Başlığı"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      className="text-xs p-1.5 rounded border bg-background font-bold text-blue-600"
+                      value={editFee}
+                      onChange={(e) => setEditFee(e.target.value)}
+                      placeholder="Ücret (₺)"
+                    />
+                    <input
+                      className="text-xs p-1.5 rounded border bg-background"
+                      value={editCity}
+                      onChange={(e) => setEditCity(e.target.value)}
+                      placeholder="Şehir"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleClose}>
-              <X className="w-4 h-4" />
-            </Button>
           </div>
         </DialogHeader>
 
