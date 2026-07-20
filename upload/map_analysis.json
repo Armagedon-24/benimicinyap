@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "# Harita Bölümünün Detaylı Açıklaması\n\n## 1. Haritanın Türü ve Görünümü\n- **Harita Türü**: Coğrafi güvenlik ve havuz haritası (Coğrafi Güvence & Havuz Haritası)\n- **Görünüm Özellikleri**:\n  - Temel renk paleti: Beyaz arka plan üzerinde gri tonlamalı coğrafi detaylar\n  - Ülke ve şehir sınırları açıkça belirgin\n  - Türkiye haritası odak noktasında\n  - Zoom seviyesi: Orta seviye (bölge seviyesinde)\n  - Sağ alt kömde zoom in/out (+/-) kontrol butonları\n  - Sol üstte harita ile ilgili açıklama metni\n\n## 2. Harita Üzerindeki Marker'lar ve İşaretler\n- **Marker'lar**:\n  - Antalya'da yeşil renkli marker (Antalya 1)\n  - Marker üzerinde sayısal değer (1) gösterimi\n- **İşaretler**:\n  - Harita üzerinde \"Uçmak istediğiniz şehre tıklayarak sınır koruma durumu (Sınırlar) görebilirsiniz\" metni\n  - Aktif görev bulunan iller listesi (Antalya)\n\n## 3. Harita Altındaki Bilgi Panelleri/Kartları\n- **Üst Bilgi Paneli**:\n  - \"Coğrafi Güvence & Havuz Haritası\" başlığı\n  - Açıklama metni: \"Haritada görevli illere tıklayarak aktif bir şekilde odaklanabilir, sınır koruma polygonlarını görebilir ve süreç başlatabilirsiniz.\"\n  - \"Aktif Güvence Bölgeleri\" etiketi\n- **Alt Bilgi Paneli**:\n  - \"Güvence Havuzu ve T.C. Kimlik Doğrulaması\" başlığı\n  - Açıklama metni: \"Ödemeleriniz güvence havuzunda bloke edilir, T.C. kimlik doğrulaması yasal mevzuat gereğidir.\"\n  - \"Detaylı Bilgi Al\" butonu\n\n## 4. Filtreleme ve Arama Elemanları\n- **Arama Alanı**:\n  - \"Yapılmasını istediğiniz iş veya anahtar kelime yazın...\" placeholder metni\n  - \"Konum Algılandı\" butonu\n- **Filtreleme Seçenekleri**:\n  - \"Tüm İller\" dropdown menüsü\n  - \"Tüm Kategoriler\" dropdown menüsü\n  - Mesafe slider (150 km)\n  - \"Haritayı Gizle\" ve \"Sorgu Önbellekten Getirildi (0.01ms)\" butonları\n\n## 5. Genel UI/UX Tasarım Detayları\n- **Renk Şeması**:\n  - Mavi ve yeşil vurgu renkleri\n  - Temiz, modern ve profesyonel görünüm\n  - Yüksek kontrast ve okunabilir metinler\n- **Düzen**:\n  - Üstte arama ve filtre alanları\n  - Orta kısımda harita\n  - Alt kısımda bilgi panelleri\n  - Sol tarafta aktif görev illeri listesi\n- **Kullanıcı Deneyimi**:\n  - Anlaşılır ve sezgisel arayüz\n  - Açık ve net talimatlar\n  - Hızlı erişim butonları\n\n## 6. Görev Kartlarının Görünümü ve Bilgileri\n- **Görev Kartı**:\n  - \"YAYINLANMIŞ AKTIF GÖREVLER (1)\" başlığı\n  - \"Mesafe Filtresi Aktif\" etiketi\n  - \"EV & BAKIM HİZMETLERİ\" kategorisi\n  - \"Teklif Alındı\" durumu\n  - \"Antalya Konyaaltı'nda Yazlık Ev\" görev başlığı\n  - (Alt kısımda kısmen görünen ek bilgiler)\n\nBu harita bölümü, coğrafi güvenlik ve havuz yönetimi için tasarlanmış bir arayüz olup, kullanıcıların bölgelere göre görevleri filtrelemesini, harita üzerinde konum bilgilerini görüntülemesini ve ilgili güvenlik prosedürlerini takip etmesini sağlamaktadır.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1784204400,
+  "id": "202607162019286b935e94c0e24ee7",
+  "model": "glm-4.6v",
+  "object": "chat.completion",
+  "request_id": "202607162019286b935e94c0e24ee7",
+  "usage": {
+    "completion_tokens": 1035,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3098,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 4133
+  }
+}

@@ -1,0 +1,12 @@
+# Target modern browsers only — eliminates unnecessary polyfills
+# (Array.prototype.at, flat, flatMap, Object.fromEntries, Object.hasOwn, etc.)
+[production]
+Chrome >= 115
+Firefox >= 115
+Safari >= 17
+Edge >= 115
+
+[development]
+last 1 Chrome version
+last 1 Firefox version
+last 1 Safari version

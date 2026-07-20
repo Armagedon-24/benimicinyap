@@ -1,0 +1,1069 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import {
+     6→  ShieldCheck,
+     7→  Users,
+     8→  ClipboardList,
+     9→  Terminal,
+    10→  Info,
+    11→  RefreshCw,
+    12→  Trash2,
+    13→  UserCheck,
+    14→  UserX,
+    15→  DollarSign,
+    16→  Loader2,
+    17→  Database,
+    18→  TrendingUp,
+    19→  Save,
+    20→  Percent,
+    21→  Banknote,
+    22→  Receipt,
+    23→  CreditCard,
+    24→  Settings,
+    25→} from 'lucide-react';
+    26→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    27→import { Button } from '@/components/ui/button';
+    28→import { Input } from '@/components/ui/input';
+    29→import { Badge } from '@/components/ui/badge';
+    30→import { Switch } from '@/components/ui/switch';
+    31→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    32→import {
+    33→  Select,
+    34→  SelectContent,
+    35→  SelectItem,
+    36→  SelectTrigger,
+    37→  SelectValue,
+    38→} from '@/components/ui/select';
+    39→import {
+    40→  Table,
+    41→  TableBody,
+    42→  TableCell,
+    43→  TableHead,
+    44→  TableHeader,
+    45→  TableRow,
+    46→} from '@/components/ui/table';
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→  AlertDialogTrigger,
+    57→} from '@/components/ui/alert-dialog';
+    58→import { ScrollArea } from '@/components/ui/scroll-area';
+    59→import { Separator } from '@/components/ui/separator';
+    60→import { Slider } from '@/components/ui/slider';
+    61→import { Label } from '@/components/ui/label';
+    62→import { toast } from 'sonner';
+    63→import { useAppStore } from '@/store/useAppStore';
+    64→import type { User, Task } from '@/lib/types';
+    65→
+    66→const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    67→  pending: { label: 'Bekliyor', variant: 'secondary' },
+    68→  assigned: { label: 'Atandı', variant: 'default' },
+    69→  in_progress: { label: 'Devam Ediyor', variant: 'default' },
+    70→  completed: { label: 'Tamamlandı', variant: 'outline' },
+    71→  cancelled: { label: 'İptal', variant: 'destructive' },
+    72→};
+    73→
+    74→export default function AdminPanel() {
+    75→  const { currentUser, tasks, setTasks, addLog, systemLogs, addLog: storeAddLog } = useAppStore();
+    76→
+    77→  const [users, setUsers] = useState<User[]>([]);
+    78→  const [allTasks, setAllTasks] = useState<Task[]>([]);
+    79→  const [stats, setStats] = useState<any>(null);
+    80→  const [loading, setLoading] = useState(true);
+    81→  const [seedLoading, setSeedLoading] = useState(false);
+    82→  const logEndRef = useRef<HTMLDivElement>(null);
+    83→
+    84→  // Revenue system state
+    85→  const [revenue, setRevenue] = useState<any>(null);
+    86→  const [settings, setSettings] = useState<any[]>([]);
+    87→  const [revenueLoading, setRevenueLoading] = useState(true);
+    88→  const [settingsSaving, setSettingsSaving] = useState(false);
+    89→
+    90→  // Local settings form
+    91→  const [commissionRate, setCommissionRate] = useState(10);
+    92→  const [commissionMode, setCommissionMode] = useState('percentage');
+    93→  const [minCommission, setMinCommission] = useState(10);
+    94→  const [maxCommission, setMaxCommission] = useState(500);
+    95→  const [commissionPayer, setCommissionPayer] = useState('tasker');
+    96→  const [listingFee, setListingFee] = useState(0);
+    97→  const [listingFeeEnabled, setListingFeeEnabled] = useState(false);
+    98→  const [withdrawFeeRate, setWithdrawFeeRate] = useState(1);
+    99→  const [minWithdrawFee, setMinWithdrawFee] = useState(5);
+   100→  const [maxWithdrawFee, setMaxWithdrawFee] = useState(100);
+   101→  const [withdrawFeeEnabled, setWithdrawFeeEnabled] = useState(true);
+   102→
+   103→  const formatTL = (amount: number) =>
+   104→    new Intl.NumberFormat('tr-TR').format(amount) + ' ₺';
+   105→
+   106→  const formatDate = (date: string) =>
+   107→    date ? new Date(date).toLocaleDateString('tr-TR') : '';
+   108→
+   109→  const fetchAll = useCallback(async () => {
+   110→    setLoading(true);
+   111→    storeAddLog('Admin verileri yenileniyor...');
+   112→    try {
+   113→      const [usersRes, tasksRes, statsRes, settingsRes, revenueRes] = await Promise.all([
+   114→        fetch('/api/admin?action=users'),
+   115→        fetch('/api/tasks'),
+   116→        fetch('/api/admin?action=stats'),
+   117→        fetch('/api/admin/settings'),
+   118→        fetch('/api/admin/revenue'),
+   119→      ]);
+   120→      const [usersData, tasksData, statsData, settingsData, revenueData] = await Promise.all([
+   121→        usersRes.json(),
+   122→        tasksRes.json(),
+   123→        statsRes.json(),
+   124→        settingsRes.json(),
+   125→        revenueRes.json(),
+   126→      ]);
+   127→      if (usersData.success) setUsers(usersData.users);
+   128→      if (tasksData.success) {
+   129→        setAllTasks(tasksData.tasks);
+   130→        setTasks(tasksData.tasks);
+   131→      }
+   132→      if (statsData.success) setStats(statsData.stats);
+   133→      if (settingsData.success) {
+   134→        setSettings(settingsData.settings);
+   135→        applySettingsToLocal(settingsData.settings);
+   136→      }
+   137→      if (revenueData.success) setRevenue(revenueData.revenue);
+   138→      storeAddLog('Admin verileri başarıyla yüklendi');
+   139→    } catch {
+   140→      storeAddLog('Admin veri yükleme hatası');
+   141→    } finally {
+   142→      setLoading(false);
+   143→      setRevenueLoading(false);
+   144→    }
+   145→  }, [setTasks, storeAddLog]);
+   146→
+   147→  const applySettingsToLocal = (s: any[]) => {
+   148→    const m: Record<string, string> = {};
+   149→    s.forEach((item) => { m[item.key] = item.value; });
+   150→    if (m['commission_rate'] !== undefined) setCommissionRate(parseFloat(m['commission_rate']));
+   151→    if (m['commission_mode'] !== undefined) setCommissionMode(m['commission_mode']);
+   152→    if (m['min_commission'] !== undefined) setMinCommission(parseFloat(m['min_commission']));
+   153→    if (m['max_commission'] !== undefined) setMaxCommission(parseFloat(m['max_commission']));
+   154→    if (m['commission_payer'] !== undefined) setCommissionPayer(m['commission_payer']);
+   155→    if (m['listing_fee'] !== undefined) setListingFee(parseFloat(m['listing_fee']));
+   156→    if (m['listing_fee_enabled'] !== undefined) setListingFeeEnabled(m['listing_fee_enabled'] === 'true');
+   157→    if (m['withdraw_fee_rate'] !== undefined) setWithdrawFeeRate(parseFloat(m['withdraw_fee_rate']));
+   158→    if (m['min_withdraw_fee'] !== undefined) setMinWithdrawFee(parseFloat(m['min_withdraw_fee']));
+   159→    if (m['max_withdraw_fee'] !== undefined) setMaxWithdrawFee(parseFloat(m['max_withdraw_fee']));
+   160→    if (m['withdraw_fee_enabled'] !== undefined) setWithdrawFeeEnabled(m['withdraw_fee_enabled'] === 'true');
+   161→  };
+   162→
+   163→  useEffect(() => {
+   164→    fetchAll();
+   165→  }, [fetchAll]);
+   166→
+   167→  useEffect(() => {
+   168→    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+   169→  }, [systemLogs]);
+   170→
+   171→  const handleSeed = async () => {
+   172→    setSeedLoading(true);
+   173→    storeAddLog('DB sıfırlama başlatıldı...');
+   174→    try {
+   175→      const res = await fetch('/api/seed', { method: 'POST' });
+   176→      const data = await res.json();
+   177→      if (data.success) {
+   178→        toast.success(data.message);
+   179→        storeAddLog('DB sıfırlandı ve yeniden dolduruldu');
+   180→        await fetchAll();
+   181→      } else {
+   182→        toast.error(data.message || 'Hata oluştu');
+   183→      }
+   184→    } catch {
+   185→      toast.error('Bağlantı hatası');
+   186→    } finally {
+   187→      setSeedLoading(false);
+   188→    }
+   189→  };
+   190→
+   191→  const handleSaveSettings = async () => {
+   192→    setSettingsSaving(true);
+   193→    try {
+   194→      const payload = [
+   195→        { key: 'commission_rate', value: String(commissionRate) },
+   196→        { key: 'commission_mode', value: commissionMode },
+   197→        { key: 'min_commission', value: String(minCommission) },
+   198→        { key: 'max_commission', value: String(maxCommission) },
+   199→        { key: 'commission_payer', value: commissionPayer },
+   200→        { key: 'listing_fee', value: String(listingFee) },
+   201→        { key: 'listing_fee_enabled', value: String(listingFeeEnabled) },
+   202→        { key: 'withdraw_fee_rate', value: String(withdrawFeeRate) },
+   203→        { key: 'min_withdraw_fee', value: String(minWithdrawFee) },
+   204→        { key: 'max_withdraw_fee', value: String(maxWithdrawFee) },
+   205→        { key: 'withdraw_fee_enabled', value: String(withdrawFeeEnabled) },
+   206→      ];
+   207→      const res = await fetch('/api/admin/settings', {
+   208→        method: 'PUT',
+   209→        headers: { 'Content-Type': 'application/json' },
+   210→        body: JSON.stringify({ settings: payload }),
+   211→      });
+   212→      const data = await res.json();
+   213→      if (data.success) {
+   214→        toast.success('Komisyon ayarları kaydedildi');
+   215→        storeAddLog('Komisyon ayarları güncellendi');
+   216→      } else {
+   217→        toast.error(data.message);
+   218→      }
+   219→    } catch {
+   220→      toast.error('Ayarlar kaydedilirken hata oluştu');
+   221→    } finally {
+   222→      setSettingsSaving(false);
+   223→    }
+   224→  };
+   225→
+   226→  const handleToggleTC = async (user: User) => {
+   227→    try {
+   228→      const res = await fetch('/api/admin', {
+   229→        method: 'POST',
+   230→        headers: { 'Content-Type': 'application/json' },
+   231→        body: JSON.stringify({ action: 'adjust-balance', userId: user.id, amount: 0 }),
+   232→      });
+   233→      // TC toggle is simulated via the adjust balance - we'll toggle locally
+   234→      setUsers((prev) =>
+   235→        prev.map((u) => (u.id === user.id ? { ...u, tcVerified: !u.tcVerified } : u))
+   236→      );
+   237→      storeAddLog(`TC doğrulama değiştirildi: ${user.fullName} → ${!user.tcVerified}`);
+   238→      toast.success(`${user.fullName} T.C. doğrulama güncellendi`);
+   239→    } catch {
+   240→      toast.error('Hata oluştu');
+   241→    }
+   242→  };
+   243→
+   244→  const handleAdjustBalance = async (userId: string, amount: number) => {
+   245→    if (isNaN(amount) || amount === 0) {
+   246→      toast.error('Geçerli bir tutar girin');
+   247→      return;
+   248→    }
+   249→    try {
+   250→      const res = await fetch('/api/admin', {
+   251→        method: 'POST',
+   252→        headers: { 'Content-Type': 'application/json' },
+   253→        body: JSON.stringify({ action: 'adjust-balance', userId, amount }),
+   254→      });
+   255→      const data = await res.json();
+   256→      if (data.success) {
+   257→        setUsers((prev) =>
+   258→          prev.map((u) => (u.id === userId ? { ...u, walletBalance: data.user.walletBalance } : u))
+   259→        );
+   260→        storeAddLog(`Bakiye ayarlandı: ${userId} → ${amount > 0 ? '+' : ''}${formatTL(amount)}`);
+   261→        toast.success(`Bakiye güncellendi: ${amount > 0 ? '+' : ''}${formatTL(amount)}`);
+   262→      } else {
+   263→        toast.error(data.message);
+   264→      }
+   265→    } catch {
+   266→      toast.error('Hata oluştu');
+   267→    }
+   268→  };
+   269→
+   270→  const handleDeleteUser = async (userId: string, fullName: string) => {
+   271→    try {
+   272→      const res = await fetch(`/api/admin?id=${userId}`, { method: 'DELETE' });
+   273→      const data = await res.json();
+   274→      if (data.success) {
+   275→        setUsers((prev) => prev.filter((u) => u.id !== userId));
+   276→        storeAddLog(`Kullanıcı silindi: ${fullName}`);
+   277→        toast.success(`${fullName} silindi`);
+   278→        await fetchAll();
+   279→      } else {
+   280→        toast.error(data.message);
+   281→      }
+   282→    } catch {
+   283→      toast.error('Hata oluştu');
+   284→    }
+   285→  };
+   286→
+   287→  const handleTaskStatus = async (taskId: string, status: string, assignedToId?: string, assignedToName?: string) => {
+   288→    try {
+   289→      const body: any = { action: 'task-status', taskId, status };
+   290→      if (assignedToId) body.assignedToId = assignedToId;
+   291→      if (assignedToName) body.assignedToName = assignedToName;
+   292→
+   293→      const res = await fetch('/api/admin', {
+   294→        method: 'POST',
+   295→        headers: { 'Content-Type': 'application/json' },
+   296→        body: JSON.stringify(body),
+   297→      });
+   298→      const data = await res.json();
+   299→      if (data.success) {
+   300→        storeAddLog(`Görev durumu değiştirildi: ${taskId} → ${status}`);
+   301→        toast.success('Görev durumu güncellendi');
+   302→        await fetchAll();
+   303→      } else {
+   304→        toast.error(data.message);
+   305→      }
+   306→    } catch {
+   307→      toast.error('Hata oluştu');
+   308→    }
+   309→  };
+   310→
+   311→  if (loading) {
+   312→    return (
+   313→      <div className="flex items-center justify-center py-20">
+   314→        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+   315→      </div>
+   316→    );
+   317→  }
+   318→
+   319→  return (
+   320→    <div className="space-y-5">
+   321→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   322→        <div className="flex items-center justify-between flex-wrap gap-3">
+   323→          <div>
+   324→            <h2 className="text-xl font-bold flex items-center gap-2">
+   325→              <ShieldCheck className="w-6 h-6 text-blue-600" />
+   326→              Admin Paneli
+   327→            </h2>
+   328→            <p className="text-sm text-muted-foreground mt-1">
+   329→              Platform yönetimi ve izleme
+   330→            </p>
+   331→          </div>
+   332→          <div className="flex gap-2">
+   333→            <Button variant="outline" size="sm" onClick={fetchAll}>
+   334→              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+   335→              Verileri Yenile
+   336→            </Button>
+   337→            <AlertDialog>
+   338→              <AlertDialogTrigger asChild>
+   339→                <Button variant="destructive" size="sm" disabled={seedLoading}>
+   340→                  {seedLoading ? (
+   341→                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+   342→                  ) : (
+   343→                    <Database className="w-3.5 h-3.5 mr-1.5" />
+   344→                  )}
+   345→                  DB Sıfırla
+   346→                </Button>
+   347→              </AlertDialogTrigger>
+   348→              <AlertDialogContent>
+   349→                <AlertDialogHeader>
+   350→                  <AlertDialogTitle>Veritabanı Sıfırla</AlertDialogTitle>
+   351→                  <AlertDialogDescription>
+   352→                    Tüm veriler silinecek ve demo veriler yeniden oluşturulacak. Bu işlem geri
+   353→                    alınamaz. Emin misiniz?
+   354→                  </AlertDialogDescription>
+   355→                </AlertDialogHeader>
+   356→                <AlertDialogFooter>
+   357→                  <AlertDialogCancel>İptal</AlertDialogCancel>
+   358→                  <AlertDialogAction onClick={handleSeed}>Sıfırla</AlertDialogAction>
+   359→                </AlertDialogFooter>
+   360→              </AlertDialogContent>
+   361→            </AlertDialog>
+   362→          </div>
+   363→        </div>
+   364→      </motion.div>
+   365→
+   366→      <Tabs defaultValue="overview" className="w-full">
+   367→        <TabsList className="grid w-full grid-cols-6 max-w-4xl overflow-x-auto">
+   368→          <TabsTrigger value="overview" className="text-xs">
+   369→            Genel Durum
+   370→          </TabsTrigger>
+   371→          <TabsTrigger value="users" className="text-xs">
+   372→            Kullanıcılar
+   373→          </TabsTrigger>
+   374→          <TabsTrigger value="tasks" className="text-xs">
+   375→            Görev & Güvence
+   376→          </TabsTrigger>
+   377→          <TabsTrigger value="revenue" className="text-xs">
+   378→            Gelir Sistemi
+   379→          </TabsTrigger>
+   380→          <TabsTrigger value="console" className="text-xs">
+   381→            Sistem Konsolu
+   382→          </TabsTrigger>
+   383→          <TabsTrigger value="admin-info" className="text-xs">
+   384→            Yönetici
+   385→          </TabsTrigger>
+   386→        </TabsList>
+   387→
+   388→        {/* Overview Tab */}
+   389→        <TabsContent value="overview" className="mt-5 space-y-5">
+   390→          {stats && (
+   391→            <>
+   392→              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+   393→                {[
+   394→                  { label: 'Kullanıcı', value: stats.totalUsers, icon: Users, color: 'text-blue-600' },
+   395→                  { label: 'Görev', value: stats.totalTasks, icon: ClipboardList, color: 'text-purple-600' },
+   396→                  { label: 'Bekleyen', value: stats.pendingTasks, icon: Info, color: 'text-amber-600' },
+   397→                  { label: 'Tamamlanan', value: stats.completedTasks, icon: UserCheck, color: 'text-green-600' },
+   398→                  { label: 'İşlem Hacmi', value: formatTL(stats.totalVolume), icon: DollarSign, color: 'text-red-600' },
+   399→                ].map((item) => (
+   400→                  <Card key={item.label}>
+   401→                    <CardContent className="p-4 text-center">
+   402→                      <item.icon className={`w-5 h-5 ${item.color} mx-auto mb-1.5`} />
+   403→                      <p className="text-xs text-muted-foreground">{item.label}</p>
+   404→                      <p className="text-lg font-bold mt-0.5">{item.value}</p>
+   405→                    </CardContent>
+   406→                  </Card>
+   407→                ))}
+   408→              </div>
+   409→
+   410→              {/* Financial summary */}
+   411→              <Card>
+   412→                <CardHeader className="pb-2">
+   413→                  <CardTitle className="text-sm">Finansal Özet</CardTitle>
+   414→                </CardHeader>
+   415→                <CardContent>
+   416→                  <div className="grid grid-cols-2 gap-4">
+   417→                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+   418→                      <p className="text-xs text-muted-foreground">Toplam İşlem Hacmi</p>
+   419→                      <p className="text-lg font-bold text-green-600 dark:text-green-400">
+   420→                        {formatTL(stats.totalVolume)}
+   421→                      </p>
+   422→                    </div>
+   423→                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+   424→                      <p className="text-xs text-muted-foreground">Escrow Hacmi</p>
+   425→                      <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+   426→                        {formatTL(stats.escrowVolume)}
+   427→                      </p>
+   428→                    </div>
+   429→                  </div>
+   430→                </CardContent>
+   431→              </Card>
+   432→            </>
+   433→          )}
+   434→        </TabsContent>
+   435→
+   436→        {/* Users Tab */}
+   437→        <TabsContent value="users" className="mt-5">
+   438→          <Card>
+   439→            <CardContent className="p-0">
+   440→              <div className="max-h-[500px] overflow-y-auto">
+   441→                <Table>
+   442→                  <TableHeader>
+   443→                    <TableRow>
+   444→                      <TableHead className="text-xs">Kullanıcı</TableHead>
+   445→                      <TableHead className="text-xs">Rol</TableHead>
+   446→                      <TableHead className="text-xs">T.C.</TableHead>
+   447→                      <TableHead className="text-xs">Bakiye</TableHead>
+   448→                      <TableHead className="text-xs">Şehir</TableHead>
+   449→                      <TableHead className="text-xs text-right">İşlemler</TableHead>
+   450→                    </TableRow>
+   451→                  </TableHeader>
+   452→                  <TableBody>
+   453→                    {users.map((user) => (
+   454→                      <TableRow key={user.id}>
+   455→                        <TableCell>
+   456→                          <div>
+   457→                            <p className="text-sm font-medium">{user.fullName}</p>
+   458→                            <p className="text-xs text-muted-foreground">{user.email}</p>
+   459→                          </div>
+   460→                        </TableCell>
+   461→                        <TableCell>
+   462→                          <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="text-[10px]">
+   463→                            {user.role === 'admin' ? 'Admin' : 'Üye'}
+   464→                          </Badge>
+   465→                        </TableCell>
+   466→                        <TableCell>
+   467→                          <Switch
+   468→                            checked={user.tcVerified}
+   469→                            onCheckedChange={() => handleToggleTC(user)}
+   470→                            className="data-[state=checked]:bg-green-500"
+   471→                          />
+   472→                        </TableCell>
+   473→                        <TableCell className="text-sm font-medium">
+   474→                          {formatTL(user.walletBalance)}
+   475→                        </TableCell>
+   476→                        <TableCell className="text-sm text-muted-foreground">{user.city}</TableCell>
+   477→                        <TableCell>
+   478→                          <div className="flex items-center justify-end gap-1">
+   479→                            <BalanceAdjustButton userId={user.id} onAdjust={handleAdjustBalance} />
+   480→                            {user.role !== 'admin' && (
+   481→                              <AlertDialog>
+   482→                                <AlertDialogTrigger asChild>
+   483→                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500">
+   484→                                    <Trash2 className="w-3.5 h-3.5" />
+   485→                                  </Button>
+   486→                                </AlertDialogTrigger>
+   487→                                <AlertDialogContent>
+   488→                                  <AlertDialogHeader>
+   489→                                    <AlertDialogTitle>Kullanıcı Sil</AlertDialogTitle>
+   490→                                    <AlertDialogDescription>
+   491→                                      <strong>{user.fullName}</strong> kullanıcısını ve tüm
+   492→                                      ilişkili verileri silmek istediğinize emin misiniz?
+   493→                                    </AlertDialogDescription>
+   494→                                  </AlertDialogHeader>
+   495→                                  <AlertDialogFooter>
+   496→                                    <AlertDialogCancel>İptal</AlertDialogCancel>
+   497→                                    <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.fullName)}>
+   498→                                      Sil
+   499→                                    </AlertDialogAction>
+   500→                                  </AlertDialogFooter>
+   501→                                </AlertDialogContent>
+   502→                              </AlertDialog>
+   503→                            )}
+   504→                          </div>
+   505→                        </TableCell>
+   506→                      </TableRow>
+   507→                    ))}
+   508→                  </TableBody>
+   509→                </Table>
+   510→              </div>
+   511→            </CardContent>
+   512→          </Card>
+   513→        </TabsContent>
+   514→
+   515→        {/* Tasks Tab */}
+   516→        <TabsContent value="tasks" className="mt-5">
+   517→          <Card>
+   518→            <CardContent className="p-0">
+   519→              <div className="max-h-[500px] overflow-y-auto">
+   520→                <Table>
+   521→                  <TableHeader>
+   522→                    <TableRow>
+   523→                      <TableHead className="text-xs">Görev</TableHead>
+   524→                      <TableHead className="text-xs">Kategori</TableHead>
+   525→                      <TableHead className="text-xs">Durum</TableHead>
+   526→                      <TableHead className="text-xs">Ücret</TableHead>
+   527→                      <TableHead className="text-xs">Atanan</TableHead>
+   528→                      <TableHead className="text-xs text-right">İşlemler</TableHead>
+   529→                    </TableRow>
+   530→                  </TableHeader>
+   531→                  <TableBody>
+   532→                    {allTasks.map((task) => {
+   533→                      const status = statusMap[task.status] || statusMap.pending;
+   534→                      return (
+   535→                        <TableRow key={task.id}>
+   536→                          <TableCell>
+   537→                            <p className="text-sm font-medium max-w-48 truncate">{task.title}</p>
+   538→                            <p className="text-xs text-muted-foreground">{task.city}</p>
+   539→                          </TableCell>
+   540→                          <TableCell className="text-xs">{task.category}</TableCell>
+   541→                          <TableCell>
+   542→                            <Select
+   543→                              value={task.status}
+   544→                              onValueChange={(v) => handleTaskStatus(task.id, v)}
+   545→                            >
+   546→                              <SelectTrigger className="h-7 text-xs w-32">
+   547→                                <SelectValue />
+   548→                              </SelectTrigger>
+   549→                              <SelectContent>
+   550→                                <SelectItem value="pending">Bekliyor</SelectItem>
+   551→                                <SelectItem value="assigned">Atandı</SelectItem>
+   552→                                <SelectItem value="in_progress">Devam Ediyor</SelectItem>
+   553→                                <SelectItem value="completed">Tamamlandı</SelectItem>
+   554→                                <SelectItem value="cancelled">İptal</SelectItem>
+   555→                              </SelectContent>
+   556→                            </Select>
+   557→                          </TableCell>
+   558→                          <TableCell className="text-sm font-semibold">
+   559→                            {formatTL(task.fee)}
+   560→                          </TableCell>
+   561→                          <TableCell className="text-xs text-muted-foreground">
+   562→                            {task.assignedToName || '-'}
+   563→                          </TableCell>
+   564→                          <TableCell className="text-right">
+   565→                            <AssignTaskerSelect
+   566→                              task={task}
+   567→                              users={users.filter((u) => u.role !== 'admin')}
+   568→                              onAssign={(userId, userName) =>
+   569→                                handleTaskStatus(task.id, 'assigned', userId, userName)
+   570→                              }
+   571→                            />
+   572→                          </TableCell>
+   573→                        </TableRow>
+   574→                      );
+   575→                    })}
+   576→                  </TableBody>
+   577→                </Table>
+   578→              </div>
+   579→            </CardContent>
+   580→          </Card>
+   581→        </TabsContent>
+   582→
+   583→        {/* Revenue System Tab */}
+   584→        <TabsContent value="revenue" className="mt-5 space-y-5">
+   585→          {revenueLoading ? (
+   586→            <div className="flex items-center justify-center py-20">
+   587→              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+   588→            </div>
+   589→          ) : (
+   590→            <>
+   591→              {/* Revenue Stats Cards */}
+   592→              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   593→                <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20">
+   594→                  <CardContent className="p-4">
+   595→                    <div className="flex items-center gap-2 mb-1">
+   596→                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+   597→                      <p className="text-xs text-muted-foreground">Toplam Platform Geliri</p>
+   598→                    </div>
+   599→                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+   600→                      {formatTL(revenue?.totalRevenue || 0)}
+   601→                    </p>
+   602→                  </CardContent>
+   603→                </Card>
+   604→                <Card>
+   605→                  <CardContent className="p-4">
+   606→                    <div className="flex items-center gap-2 mb-1">
+   607→                      <Banknote className="w-4 h-4 text-blue-600" />
+   608→                      <p className="text-xs text-muted-foreground">Bugünkü Gelir</p>
+   609→                    </div>
+   610→                    <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+   611→                      {formatTL(revenue?.todayRevenue || 0)}
+   612→                    </p>
+   613→                  </CardContent>
+   614→                </Card>
+   615→                <Card>
+   616→                  <CardContent className="p-4">
+   617→                    <div className="flex items-center gap-2 mb-1">
+   618→                      <Receipt className="w-4 h-4 text-purple-600" />
+   619→                      <p className="text-xs text-muted-foreground">Aylık Gelir</p>
+   620→                    </div>
+   621→                    <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+   622→                      {formatTL(revenue?.monthRevenue || 0)}
+   623→                    </p>
+   624→                  </CardContent>
+   625→                </Card>
+   626→                <Card>
+   627→                  <CardContent className="p-4">
+   628→                    <div className="flex items-center gap-2 mb-1">
+   629→                      <Percent className="w-4 h-4 text-amber-600" />
+   630→                      <p className="text-xs text-muted-foreground">Ort. Komisyon / Görev</p>
+   631→                    </div>
+   632→                    <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+   633→                      {formatTL(revenue?.avgCommission || 0)}
+   634→                    </p>
+   635→                  </CardContent>
+   636→                </Card>
+   637→              </div>
+   638→
+   639→              {/* Revenue Breakdown */}
+   640→              <Card>
+   641→                <CardHeader className="pb-2">
+   642→                  <CardTitle className="text-sm flex items-center gap-2">
+   643→                    <DollarSign className="w-4 h-4 text-emerald-600" />
+   644→                    Gelir Dağılımı
+   645→                  </CardTitle>
+   646→                </CardHeader>
+   647→                <CardContent>
+   648→                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+   649→                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+   650→                      <p className="text-xs text-muted-foreground">Görev Komisyonları</p>
+   651→                      <p className="text-base font-bold text-blue-600">{formatTL(revenue?.totalCommissionEarned || 0)}</p>
+   652→                      <p className="text-[10px] text-muted-foreground mt-1">{revenue?.tasksWithCommission || 0} görevden</p>
+   653→                    </div>
+   654→                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+   655→                      <p className="text-xs text-muted-foreground">Escrow Ücretleri</p>
+   656→                      <p className="text-base font-bold text-green-600">{formatTL(revenue?.totalPlatformFees || 0)}</p>
+   657→                      <p className="text-[10px] text-muted-foreground mt-1">Tamamlanan görevlerden</p>
+   658→                    </div>
+   659→                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+   660→                      <p className="text-xs text-muted-foreground">Çekim Ücretleri</p>
+   661→                      <p className="text-base font-bold text-amber-600">{formatTL(revenue?.totalWithdrawFees || 0)}</p>
+   662→                      <p className="text-[10px] text-muted-foreground mt-1">Banka çekimlerinden</p>
+   663→                    </div>
+   664→                  </div>
+   665→                </CardContent>
+   666→              </Card>
+   667→
+   668→              {/* Commission Settings */}
+   669→              <Card>
+   670→                <CardHeader className="pb-2">
+   671→                  <div className="flex items-center justify-between">
+   672→                    <CardTitle className="text-sm flex items-center gap-2">
+   673→                      <Settings className="w-4 h-4" />
+   674→                      Komisyon Ayarları
+   675→                    </CardTitle>
+   676→                    <Button size="sm" onClick={handleSaveSettings} disabled={settingsSaving}>
+   677→                      {settingsSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+   678→                      Kaydet
+   679→                    </Button>
+   680→                  </div>
+   681→                </CardHeader>
+   682→                <CardContent className="space-y-6">
+   683→                  {/* Görev Komisyonu */}
+   684→                  <div className="space-y-4">
+   685→                    <h4 className="text-sm font-semibold flex items-center gap-2">
+   686→                      <Percent className="w-4 h-4 text-blue-600" />
+   687→                      Görev Tamamlama Komisyonu
+   688→                    </h4>
+   689→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   690→                      <div className="space-y-2">
+   691→                        <Label className="text-xs">Komisyon Modu</Label>
+   692→                        <Select value={commissionMode} onValueChange={setCommissionMode}>
+   693→                          <SelectTrigger className="h-9">
+   694→                            <SelectValue />
+   695→                          </SelectTrigger>
+   696→                          <SelectContent>
+   697→                            <SelectItem value="percentage">Yüzde (%)</SelectItem>
+   698→                            <SelectItem value="flat">Sabit Tutar (₺)</SelectItem>
+   699→                          </SelectContent>
+   700→                        </Select>
+   701→                      </div>
+   702→                      <div className="space-y-2">
+   703→                        <Label className="text-xs">Komisyonu Kim Öder?</Label>
+   704→                        <Select value={commissionPayer} onValueChange={setCommissionPayer}>
+   705→                          <SelectTrigger className="h-9">
+   706→                            <SelectValue />
+   707→                          </SelectTrigger>
+   708→                          <SelectContent>
+   709→                            <SelectItem value="tasker">Hizmet Veren</SelectItem>
+   710→                            <SelectItem value="requester">Görev Sahibi</SelectItem>
+   711→                            <SelectItem value="both">İkisi Birlikte</SelectItem>
+   712→                          </SelectContent>
+   713→                        </Select>
+   714→                      </div>
+   715→                    </div>
+   716→
+   717→                    <div className="space-y-2">
+   718→                      <div className="flex items-center justify-between">
+   719→                        <Label className="text-xs">
+   720→                          {commissionMode === 'percentage' ? `Komisyon Oranı: %${commissionRate}` : `Sabit Komisyon: ${commissionRate} ₺`}
+   721→                        </Label>
+   722→                        <span className="text-xs font-medium text-blue-600">
+   723→                          {commissionMode === 'percentage'
+   724→                            ? `Örnek: 1000₺ görev → ${Math.max(minCommission, Math.min((1000 * commissionRate) / 100, maxCommission)).toFixed(0)}₺ komisyon`
+   725→                            : `Her görev için ${commissionRate}₺`}
+   726→                        </span>
+   727→                      </div>
+   728→                      <Slider
+   729→                        value={[commissionMode === 'percentage' ? commissionRate : commissionRate * 10]}
+   730→                        min={commissionMode === 'percentage' ? 1 : 1}
+   731→                        max={commissionMode === 'percentage' ? 30 : 100}
+   732→                        step={1}
+   733→                        onValueChange={(v) => setCommissionRate(commissionMode === 'percentage' ? v[0] : v[0] / 10)}
+   734→                        className="py-2"
+   735→                      />
+   736→                    </div>
+   737→
+   738→                    <div className="grid grid-cols-2 gap-4">
+   739→                      <div className="space-y-2">
+   740→                        <Label className="text-xs">Minimum Komisyon (₺)</Label>
+   741→                        <Input
+   742→                          type="number"
+   743→                          className="h-9"
+   744→                          value={minCommission}
+   745→                          onChange={(e) => setMinCommission(parseFloat(e.target.value) || 0)}
+   746→                          min={0}
+   747→                        />
+   748→                      </div>
+   749→                      <div className="space-y-2">
+   750→                        <Label className="text-xs">Maksimum Komisyon (₺)</Label>
+   751→                        <Input
+   752→                          type="number"
+   753→                          className="h-9"
+   754→                          value={maxCommission}
+   755→                          onChange={(e) => setMaxCommission(parseFloat(e.target.value) || 0)}
+   756→                          min={0}
+   757→                        />
+   758→                      </div>
+   759→                    </div>
+   760→                  </div>
+   761→
+   762→                  <Separator />
+   763→
+   764→                  {/* Yayınlama Ücreti */}
+   765→                  <div className="space-y-4">
+   766→                    <div className="flex items-center justify-between">
+   767→                      <h4 className="text-sm font-semibold flex items-center gap-2">
+   768→                        <ClipboardList className="w-4 h-4 text-purple-600" />
+   769→                        Görev Yayınlama Ücreti
+   770→                      </h4>
+   771→                      <Switch
+   772→                        checked={listingFeeEnabled}
+   773→                        onCheckedChange={setListingFeeEnabled}
+   774→                        className="data-[state=checked]:bg-purple-500"
+   775→                      />
+   776→                    </div>
+   777→                    {listingFeeEnabled && (
+   778→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   779→                        <div className="space-y-2">
+   780→                          <Label className="text-xs">Yayınlama Ücreti (₺)</Label>
+   781→                          <Input
+   782→                            type="number"
+   783→                            className="h-9"
+   784→                            value={listingFee}
+   785→                            onChange={(e) => setListingFee(parseFloat(e.target.value) || 0)}
+   786→                            min={0}
+   787→                            disabled={!listingFeeEnabled}
+   788→                          />
+   789→                          <p className="text-[10px] text-muted-foreground">Her görev yayınlamasında alınacak ücret</p>
+   790→                        </div>
+   791→                      </div>
+   792→                    )}
+   793→                  </div>
+   794→
+   795→                  <Separator />
+   796→
+   797→                  {/* Çekim Ücreti */}
+   798→                  <div className="space-y-4">
+   799→                    <div className="flex items-center justify-between">
+   800→                      <h4 className="text-sm font-semibold flex items-center gap-2">
+   801→                        <CreditCard className="w-4 h-4 text-red-600" />
+   802→                        Banka Çekim Ücreti
+   803→                      </h4>
+   804→                      <Switch
+   805→                        checked={withdrawFeeEnabled}
+   806→                        onCheckedChange={setWithdrawFeeEnabled}
+   807→                        className="data-[state=checked]:bg-red-500"
+   808→                      />
+   809→                    </div>
+   810→                    {withdrawFeeEnabled && (
+   811→                      <>
+   812→                        <div className="space-y-2">
+   813→                          <div className="flex items-center justify-between">
+   814→                            <Label className="text-xs">Çekim Komisyon Oranı: %{withdrawFeeRate}</Label>
+   815→                            <span className="text-xs font-medium text-red-600">
+   816→                              Örnek: 1000₺ çekim → {Math.max(minWithdrawFee, Math.min((1000 * withdrawFeeRate) / 100, maxWithdrawFee)).toFixed(0)}₺ ücret
+   817→                            </span>
+   818→                          </div>
+   819→                          <Slider
+   820→                            value={[withdrawFeeRate]}
+   821→                            min={0}
+   822→                            max={5}
+   823→                            step={0.1}
+   824→                            onValueChange={(v) => setWithdrawFeeRate(v[0])}
+   825→                            className="py-2"
+   826→                          />
+   827→                        </div>
+   828→                        <div className="grid grid-cols-2 gap-4">
+   829→                          <div className="space-y-2">
+   830→                            <Label className="text-xs">Minimum Çekim Ücreti (₺)</Label>
+   831→                            <Input
+   832→                              type="number"
+   833→                              className="h-9"
+   834→                              value={minWithdrawFee}
+   835→                              onChange={(e) => setMinWithdrawFee(parseFloat(e.target.value) || 0)}
+   836→                              min={0}
+   837→                            />
+   838→                          </div>
+   839→                          <div className="space-y-2">
+   840→                            <Label className="text-xs">Maksimum Çekim Ücreti (₺)</Label>
+   841→                            <Input
+   842→                              type="number"
+   843→                              className="h-9"
+   844→                              value={maxWithdrawFee}
+   845→                              onChange={(e) => setMaxWithdrawFee(parseFloat(e.target.value) || 0)}
+   846→                              min={0}
+   847→                            />
+   848→                          </div>
+   849→                        </div>
+   850→                      </>
+   851→                    )}
+   852→                  </div>
+   853→                </CardContent>
+   854→              </Card>
+   855→
+   856→              {/* Recent Revenue Transactions */}
+   857→              {revenue?.recentRevenue && revenue.recentRevenue.length > 0 && (
+   858→                <Card>
+   859→                  <CardHeader className="pb-2">
+   860→                    <CardTitle className="text-sm">Son Gelir İşlemleri</CardTitle>
+   861→                  </CardHeader>
+   862→                  <CardContent className="p-0">
+   863→                    <div className="max-h-64 overflow-y-auto">
+   864→                      <Table>
+   865→                        <TableHeader>
+   866→                          <TableRow>
+   867→                            <TableHead className="text-xs">İşlem</TableHead>
+   868→                            <TableHead className="text-xs">Kullanıcı</TableHead>
+   869→                            <TableHead className="text-xs">Tür</TableHead>
+   870→                            <TableHead className="text-xs text-right">Tutar</TableHead>
+   871→                            <TableHead className="text-xs">Tarih</TableHead>
+   872→                          </TableRow>
+   873→                        </TableHeader>
+   874→                        <TableBody>
+   875→                          {revenue.recentRevenue.map((tx: any) => (
+   876→                            <TableRow key={tx.id}>
+   877→                              <TableCell className="text-xs font-medium max-w-36 truncate">
+   878→                                {tx.taskTitle || '-'}
+   879→                              </TableCell>
+   880→                              <TableCell className="text-xs text-muted-foreground">
+   881→                                {tx.user?.fullName || '-'}
+   882→                              </TableCell>
+   883→                              <TableCell>
+   884→                                <Badge variant="outline" className="text-[10px]">
+   885→                                  {tx.type === 'platform_commission' ? 'Komisyon' : tx.type === 'escrow_release' ? 'Escrow Ücreti' : 'Diğer'}
+   886→                                </Badge>
+   887→                              </TableCell>
+   888→                              <TableCell className="text-xs text-right font-semibold text-emerald-600">
+   889→                                +{formatTL(tx.type === 'platform_commission' ? tx.amount : (tx.platformFee || 0))}
+   890→                              </TableCell>
+   891→                              <TableCell className="text-xs text-muted-foreground">
+   892→                                {new Date(tx.createdAt).toLocaleDateString('tr-TR')}
+   893→                              </TableCell>
+   894→                            </TableRow>
+   895→                          ))}
+   896→                        </TableBody>
+   897→                      </Table>
+   898→                    </div>
+   899→                  </CardContent>
+   900→                </Card>
+   901→              )}
+   902→            </>
+   903→          )}
+   904→        </TabsContent>
+   905→
+   906→        {/* Console Tab */}
+   907→        <TabsContent value="console" className="mt-5">
+   908→          <Card className="border-green-200 dark:border-green-800">
+   909→            <CardHeader className="pb-2">
+   910→              <CardTitle className="text-sm flex items-center gap-2">
+   911→                <Terminal className="w-4 h-4 text-green-600" />
+   912→                Sistem Konsolu & Log
+   913→              </CardTitle>
+   914→            </CardHeader>
+   915→            <CardContent>
+   916→              <div className="bg-black/90 dark:bg-black rounded-lg p-4 font-mono text-[11px] text-green-400 max-h-80 overflow-y-auto">
+   917→                {systemLogs.length === 0 ? (
+   918→                  <p className="text-green-600/50">Sistem logları bekleniyor...</p>
+   919→                ) : (
+   920→                  systemLogs.map((log, i) => (
+   921→                    <div key={i} className="py-0.5 border-b border-green-900/30 last:border-0">
+   922→                      {log}
+   923→                    </div>
+   924→                  ))
+   925→                )}
+   926→                <div ref={logEndRef} />
+   927→              </div>
+   928→            </CardContent>
+   929→          </Card>
+   930→        </TabsContent>
+   931→
+   932→        {/* Admin Info Tab */}
+   933→        <TabsContent value="admin-info" className="mt-5">
+   934→          {currentUser && (
+   935→            <Card className="max-w-lg">
+   936→              <CardContent className="p-6 space-y-4">
+   937→                <div className="flex items-center gap-4">
+   938→                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-xl font-bold">
+   939→                    {currentUser.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+   940→                  </div>
+   941→                  <div>
+   942→                    <h3 className="text-lg font-bold">{currentUser.fullName}</h3>
+   943→                    <Badge variant="destructive" className="text-[10px] mt-1">
+   944→                      Sistem Yöneticisi
+   945→                    </Badge>
+   946→                  </div>
+   947→                </div>
+   948→                <Separator />
+   949→                <div className="grid grid-cols-2 gap-3 text-sm">
+   950→                  <div>
+   951→                    <p className="text-xs text-muted-foreground">E-posta</p>
+   952→                    <p className="font-medium">{currentUser.email}</p>
+   953→                  </div>
+   954→                  <div>
+   955→                    <p className="text-xs text-muted-foreground">Şehir</p>
+   956→                    <p className="font-medium">{currentUser.city}</p>
+   957→                  </div>
+   958→                  <div>
+   959→                    <p className="text-xs text-muted-foreground">Cüzdan</p>
+   960→                    <p className="font-medium text-blue-600">{formatTL(currentUser.walletBalance)}</p>
+   961→                  </div>
+   962→                  <div>
+   963→                    <p className="text-xs text-muted-foreground">Escrow</p>
+   964→                    <p className="font-medium text-amber-600">{formatTL(currentUser.escrowBalance)}</p>
+   965→                  </div>
+   966→                  <div>
+   967→                    <p className="text-xs text-muted-foreground">T.C. Doğrulama</p>
+   968→                    <p className="font-medium">{currentUser.tcVerified ? '✓ Onaylı' : '✗ Onaysız'}</p>
+   969→                  </div>
+   970→                  <div>
+   971→                    <p className="text-xs text-muted-foreground">Kayıt Tarihi</p>
+   972→                    <p className="font-medium">{formatDate(currentUser.createdAt)}</p>
+   973→                  </div>
+   974→                </div>
+   975→              </CardContent>
+   976→            </Card>
+   977→          )}
+   978→        </TabsContent>
+   979→      </Tabs>
+   980→    </div>
+   981→  );
+   982→}
+   983→
+   984→// Sub-component: Balance adjust button with input
+   985→function BalanceAdjustButton({ userId, onAdjust }: { userId: string; onAdjust: (id: string, amt: number) => void }) {
+   986→  const [amount, setAmount] = useState('');
+   987→  const [open, setOpen] = useState(false);
+   988→
+   989→  return (
+   990→    <div className="relative">
+   991→      <Button
+   992→        variant="ghost"
+   993→        size="icon"
+   994→        className="h-7 w-7"
+   995→        onClick={() => setOpen(!open)}
+   996→        title="Bakiye ayarla"
+   997→      >
+   998→        <DollarSign className="w-3.5 h-3.5" />
+   999→      </Button>
+  1000→      {open && (
+  1001→        <div className="absolute right-0 top-8 z-50 bg-popover border rounded-lg p-2 shadow-lg w-44 space-y-2">
+  1002→          <Input
+  1003→            type="number"
+  1004→            placeholder="Tutar (±)"
+  1005→            className="h-7 text-xs"
+  1006→            value={amount}
+  1007→            onChange={(e) => setAmount(e.target.value)}
+  1008→            autoFocus
+  1009→          />
+  1010→          <div className="flex gap-1">
+  1011→            <Button
+  1012→              size="sm"
+  1013→              className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+  1014→              onClick={() => {
+  1015→                onAdjust(userId, parseFloat(amount) || 0);
+  1016→                setOpen(false);
+  1017→                setAmount('');
+  1018→              }}
+  1019→            >
+  1020→              Uygula
+  1021→            </Button>
+  1022→            <Button
+  1023→              size="sm"
+  1024→              variant="ghost"
+  1025→              className="h-7 text-xs"
+  1026→              onClick={() => {
+  1027→                setOpen(false);
+  1028→                setAmount('');
+  1029→              }}
+  1030→            >
+  1031→              Kapat
+  1032→            </Button>
+  1033→          </div>
+  1034→        </div>
+  1035→      )}
+  1036→    </div>
+  1037→  );
+  1038→}
+  1039→
+  1040→// Sub-component: Assign tasker select
+  1041→function AssignTaskerSelect({
+  1042→  task,
+  1043→  users,
+  1044→  onAssign,
+  1045→}: {
+  1046→  task: Task;
+  1047→  users: User[];
+  1048→  onAssign: (userId: string, userName: string) => void;
+  1049→}) {
+  1050→  if (task.status !== 'pending') return <span className="text-xs text-muted-foreground">-</span>;
+  1051→
+  1052→  return (
+  1053→    <Select onValueChange={(v) => {
+  1054→      const user = users.find((u) => u.id === v);
+  1055→      if (user) onAssign(user.id, user.fullName);
+  1056→    }}>
+  1057→      <SelectTrigger className="h-7 text-xs w-32">
+  1058→        <SelectValue placeholder="Ata" />
+  1059→      </SelectTrigger>
+  1060→      <SelectContent>
+  1061→        {users.map((u) => (
+  1062→          <SelectItem key={u.id} value={u.id}>
+  1063→            {u.fullName}
+  1064→          </SelectItem>
+  1065→        ))}
+  1066→      </SelectContent>
+  1067→    </Select>
+  1068→  );
+  1069→}

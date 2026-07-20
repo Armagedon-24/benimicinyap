@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL")
+}
+
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  password            String
+  fullName            String   @default("")
+  city                String   @default("")
+  bio                 String   @default("")
+  tcNo                String   @default("")
+  tcVerified          Boolean  @default(false)
+  paymentVerified     Boolean  @default(false)
+  role                String   @default("user") // "user" | "admin"
+  walletBalance       Float    @default(5000)
+  escrowBalance       Float    @default(0)
+  rating              Float    @default(5.0)
+  totalReviews        Int      @default(0)
+  completedTasksCount Int     @default(0)
+  isOnline            Boolean  @default(true)
+  darkMode            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tasks       Task[]
+  assignedTasks Task[]  @relation("AssignedTasks")
+  bids        Bid[]
+  transactions Transaction[]
+  notifications Notification[]
+  sentMessages Message[]  @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  paymentCards PaymentCard[]
+}
+
+model Task {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  city          String
+  district      String   @default("")
+  category      String
+  fee           Float
+  dueDate       String   @default("")
+  status        String   @default("pending") // pending, assigned, in_progress, completed, cancelled
+  latitude      Float    @default(36.8841)
+  longitude     Float    @default(30.7056)
+  requesterId   String
+  assignedToId  String?
+  assignedToName String?
+  evidencePhoto       String?
+  evidenceDescription String?
+  evidenceLocation    String?
+  disputeReason       String?
+  disputedAt          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requester User          @relation(fields: [requesterId], references: [id])
+  assignee  User?         @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  bids     Bid[]
+  messages  Message[]
+  transactions Transaction[]
+}
+
+model Bid {
+  id           String   @id @default(cuid())
+  taskId       String
+  taskerId     String
+  taskerName   String
+  taskerRating Float    @default(5.0)
+  amount       Float
+  proposalText String   @default("")
+  status       String   @default("pending") // pending, accepted, rejected
+  createdAt    DateTime @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id])
+  tasker User @relation(fields: [taskerId], references: [id])
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  userId       String
+  taskId       String?
+  taskTitle    String   @default("")
+  amount       Float
+  platformFee  Float    @default(0)
+  type         String   // escrow_block, escrow_release, wallet_load, wallet_withdraw, admin_adjust, platform_commission
+  status       String   @default("completed") // pending, completed, failed
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+  task Task? @relation(fields: [taskId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info") // info, success, warning, error
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  taskId    String
+  senderId  String
+  senderName String
+  content   String
+  createdAt DateTime @default(now())
+
+  task     Task  @relation(fields: [taskId], references: [id])
+  sender   User  @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User? @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  receiverId String
+}
+
+model PaymentCard {
+  id         String   @id @default(cuid())
+  userId     String
+  bankName   String
+  cardNumber String   @default("")
+  cardHolder String   @default("")
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String   @default("")
+ type      String   @default("string") // string, number, boolean
+  group     String   @default("general") // commission, listing, withdraw, general
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   @default("info")
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  taskId       String
+  taskTitle    String   @default("")
+  fromUserId   String
+  fromUserName String
+  toUserId     String
+  toUserName   String
+  rating       Float    @default(5.0)
+  comment      String   @default("")
+  fromRole     String   @default("requester") // requester, tasker
+  createdAt    DateTime @default(now())
+}
