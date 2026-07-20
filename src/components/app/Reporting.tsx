@@ -46,10 +46,12 @@ interface Stats {
 }
 
 export default function Reporting() {
-  const { addLog } = useAppStore();
+  const { currentUser, addLog } = useAppStore();
   const [stats, setStats] = useState<Stats | null>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,54 +90,95 @@ export default function Reporting() {
   // Category breakdown
   const categoryData = (() => {
     const catCount: Record<string, number> = {};
-    tasks.forEach((t) => {
+    const relevantTasks = isAdmin
+      ? tasks
+      : tasks.filter(
+          (t) =>
+            t.requesterId === currentUser?.id ||
+            t.assignedToId === currentUser?.id ||
+            (t.bids || []).some((b: any) => b.taskerId === currentUser?.id)
+        );
+    relevantTasks.forEach((t) => {
       catCount[t.category] = (catCount[t.category] || 0) + 1;
     });
     return Object.entries(catCount).map(([name, value]) => ({ name, value }));
   })();
 
-  // Wallet balance trend (simulated)
-  const walletTrend = [
-    { ay: 'Oca', bakiye: 5000 },
-    { ay: 'Şub', bakiye: 6200 },
-    { ay: 'Mar', bakiye: 7800 },
-    { ay: 'Nis', bakiye: 8500 },
-    { ay: 'May', bakiye: 7200 },
-    { ay: 'Haz', bakiye: 9100 },
-  ];
+  const myRequestedTasks = tasks.filter((t) => t.requesterId === currentUser?.id);
+  const myAssignedTasks = tasks.filter(
+    (t) =>
+      t.assignedToId === currentUser?.id ||
+      (t.bids || []).some((b: any) => b.taskerId === currentUser?.id)
+  );
+  const myCompletedTasks = tasks.filter(
+    (t) =>
+      t.status === 'completed' &&
+      (t.requesterId === currentUser?.id || t.assignedToId === currentUser?.id)
+  );
 
-  const summaryCards = stats
-    ? [
+  const summaryCards = isAdmin
+    ? stats
+      ? [
+          {
+            label: 'Toplam Platform Görevi',
+            value: stats.totalTasks,
+            icon: ClipboardList,
+            color: 'text-blue-600 dark:text-blue-400',
+            bg: 'bg-blue-100 dark:bg-blue-900/40',
+          },
+          {
+            label: 'Aktif Görevler',
+            value: stats.pendingTasks + stats.inProgressTasks + stats.assignedTasks,
+            icon: Activity,
+            color: 'text-amber-600 dark:text-amber-400',
+            bg: 'bg-amber-100 dark:bg-amber-900/40',
+          },
+          {
+            label: 'Tamamlanan Görevler',
+            value: stats.completedTasks,
+            icon: CheckCircle2,
+            color: 'text-green-600 dark:text-green-400',
+            bg: 'bg-green-100 dark:bg-green-900/40',
+          },
+          {
+            label: 'Toplam İşlem Hacmi',
+            value: formatTL(stats.totalVolume),
+            icon: TurkishLiraIcon,
+            color: 'text-purple-600 dark:text-purple-400',
+            bg: 'bg-purple-100 dark:bg-purple-900/40',
+          },
+        ]
+      : []
+    : [
         {
-          label: 'Toplam Görev',
-          value: stats.totalTasks,
+          label: 'Verdiğim Görevler',
+          value: myRequestedTasks.length,
           icon: ClipboardList,
           color: 'text-blue-600 dark:text-blue-400',
           bg: 'bg-blue-100 dark:bg-blue-900/40',
         },
         {
-          label: 'Aktif Görev',
-          value: stats.pendingTasks + stats.inProgressTasks + stats.assignedTasks,
+          label: 'Üstlendiğim Görevler',
+          value: myAssignedTasks.length,
           icon: Activity,
           color: 'text-amber-600 dark:text-amber-400',
           bg: 'bg-amber-100 dark:bg-amber-900/40',
         },
         {
-          label: 'Tamamlanan',
-          value: stats.completedTasks,
+          label: 'Tamamladığım Görevler',
+          value: myCompletedTasks.length,
           icon: CheckCircle2,
           color: 'text-green-600 dark:text-green-400',
           bg: 'bg-green-100 dark:bg-green-900/40',
         },
         {
-          label: 'Toplam İşlem Hacmi',
-          value: formatTL(stats.totalVolume),
+          label: 'Cüzdan Bakiyem',
+          value: formatTL(currentUser?.walletBalance || 0),
           icon: TurkishLiraIcon,
-          color: 'text-purple-600 dark:text-purple-400',
-          bg: 'bg-purple-100 dark:bg-purple-900/40',
+          color: 'text-emerald-600 dark:text-emerald-400',
+          bg: 'bg-emerald-100 dark:bg-emerald-900/40',
         },
-      ]
-    : [];
+      ];
 
   if (loading) {
     return (
@@ -150,10 +193,12 @@ export default function Reporting() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <h2 className="text-xl font-bold flex items-center gap-2">
           <BarChart3 className="w-6 h-6 text-blue-600" />
-          Raporlama Paneli
+          {isAdmin ? 'Platform Genel Raporlama Paneli' : 'Kişisel Performans & Raporlama'}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Platform genel performans ve istatistikler
+          {isAdmin
+            ? 'Platform genel performans ve sistem istatistikleri'
+            : 'Verdiğiniz ve aldığınız görevlere ait kişisel performans özetiniz'}
         </p>
       </motion.div>
 

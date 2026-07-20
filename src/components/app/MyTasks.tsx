@@ -60,13 +60,23 @@ export default function MyTasks() {
 
   if (!currentUser) return null;
 
-  const givenTasks = tasks.filter((t) => t.requesterId === currentUser.id);
+  const isAdmin = currentUser.role === 'admin';
+  const givenTasks = tasks.filter((t) => t.requesterId === currentUser.id && t.status !== 'completed' && t.status !== 'cancelled');
   const takenTasks = tasks.filter(
     (t) =>
-      t.assignedToId === currentUser.id ||
-      (t.bids || []).some((b) => b.taskerId === currentUser.id)
+      (t.assignedToId === currentUser.id ||
+        (t.bids || []).some((b) => b.taskerId === currentUser.id)) &&
+      t.status !== 'completed' &&
+      t.status !== 'cancelled'
   );
-  const archiveTasks = tasks.filter((t) => t.status === 'completed');
+  const archiveTasks = tasks.filter(
+    (t) =>
+      (t.status === 'completed' || t.status === 'cancelled') &&
+      (isAdmin ||
+        t.requesterId === currentUser.id ||
+        t.assignedToId === currentUser.id ||
+        (t.bids || []).some((b) => b.taskerId === currentUser.id))
+  );
 
   const formatTL = (amount: number) =>
     new Intl.NumberFormat('tr-TR').format(amount) + ' ₺';

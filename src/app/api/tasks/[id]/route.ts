@@ -142,6 +142,71 @@ export async function PATCH(
 
     const targetAssigneeId = updatedTask.assignedToId || task.assignedToId;
 
+    // Create DB notifications for both Requester and Worker based on status change
+    if (status) {
+      // Notify Requester
+      if (task.requesterId) {
+        let reqTitle = "";
+        let reqMsg = "";
+        if (status === "assigned" || status === "in_progress") {
+          reqTitle = "Görev Üstlenildi";
+          reqMsg = `"${task.title}" göreviniz ${assignedToName || "görevli"} tarafından üstlenildi.`;
+        } else if (status === "delivered") {
+          reqTitle = "Görev Teslim Edildi! 📦";
+          reqMsg = `"${task.title}" görevi görevli tarafından tamamlandı. Lütfen kontrol edip onaylayın.`;
+        } else if (status === "completed") {
+          reqTitle = "Görev Başarıyla Tamamlandı 🎉";
+          reqMsg = `"${task.title}" görevi başarıyla onaylandı ve ödeme görevliye aktarıldı.`;
+        } else if (status === "cancelled") {
+          reqTitle = "Görev İptal Edildi";
+          reqMsg = `"${task.title}" görevi iptal edildi. Ücret cüzdanınıza iade edildi.`;
+        }
+
+        if (reqTitle) {
+          await db.notification.create({
+            data: {
+              userId: task.requesterId,
+              title: reqTitle,
+              message: reqMsg,
+              type: status === "completed" ? "success" : "info",
+              read: false,
+            },
+          }).catch(() => {});
+        }
+      }
+
+      // Notify Assigned Worker
+      if (targetAssigneeId) {
+        let wrkTitle = "";
+        let wrkMsg = "";
+        if (status === "assigned" || status === "in_progress") {
+          wrkTitle = "Tebrikler! Görev Size Atandı 🎯";
+          wrkMsg = `"${task.title}" görevi başvurunuz kabul edildi ve size atandı. Göreve başlayabilirsiniz.`;
+        } else if (status === "delivered") {
+          wrkTitle = "Teslimat Bildirimi Gönderildi ⏳";
+          wrkMsg = `"${task.title}" görevi teslim edildi. İşverenin onayı bekleniyor.`;
+        } else if (status === "completed") {
+          wrkTitle = "Tebrikler! Ödemeniz Cüzdanınıza Aktarıldı 💰";
+          wrkMsg = `"${task.title}" görevi işveren tarafından onaylandı. Kazancınız cüzdanınıza aktarıldı.`;
+        } else if (status === "cancelled") {
+          wrkTitle = "Görev İptal Edildi ❌";
+          wrkMsg = `"${task.title}" görevi iptal edildi.`;
+        }
+
+        if (wrkTitle) {
+          await db.notification.create({
+            data: {
+              userId: targetAssigneeId,
+              title: wrkTitle,
+              message: wrkMsg,
+              type: status === "completed" ? "success" : "info",
+              read: false,
+            },
+          }).catch(() => {});
+        }
+      }
+    }
+
     // If task is being completed, release escrow to tasker with commission deduction
     if (status === "completed" && targetAssigneeId) {
       const settings = await getCommissionSettings();
