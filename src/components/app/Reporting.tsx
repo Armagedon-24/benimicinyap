@@ -104,6 +104,16 @@ export default function Reporting() {
     return Object.entries(catCount).map(([name, value]) => ({ name, value }));
   })();
 
+  // Wallet balance trend (simulated)
+  const walletTrend = [
+    { ay: 'Oca', bakiye: 5000 },
+    { ay: 'Şub', bakiye: 6200 },
+    { ay: 'Mar', bakiye: 7800 },
+    { ay: 'Nis', bakiye: 8500 },
+    { ay: 'May', bakiye: 7200 },
+    { ay: 'Haz', bakiye: 9100 },
+  ];
+
   const myRequestedTasks = tasks.filter((t) => t.requesterId === currentUser?.id);
   const myAssignedTasks = tasks.filter(
     (t) =>
