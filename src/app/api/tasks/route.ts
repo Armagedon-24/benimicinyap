@@ -72,11 +72,12 @@ export async function POST(request: NextRequest) {
       requesterId,
     } = body;
 
-    if (!title || !description || !city || !category || !fee || !requesterId) {
+    const numFee = Number(fee);
+    if (!title || !description || !city || !category || isNaN(numFee) || numFee <= 0 || !requesterId) {
       return NextResponse.json(
         {
           success: false,
-          message: "Zorunlu alanlar: başlık, açıklama, şehir, kategori, ücret, talep eden ID",
+          message: "Geçersiz veya eksik alanlar. Görev ücreti 0'dan büyük bir sayı olmalıdır.",
         },
         { status: 400 }
       );
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user.walletBalance < fee) {
+    if (user.walletBalance < numFee) {
       return NextResponse.json(
         {
           success: false,

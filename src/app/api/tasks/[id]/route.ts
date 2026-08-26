@@ -119,7 +119,60 @@ export async function PATCH(
     if (title) updateData.title = title;
     if (description) updateData.description = description;
     if (category) updateData.category = category;
-    if (fee !== undefined && !isNaN(Number(fee))) updateData.fee = Number(fee);
+    if (fee !== undefined && !isNaN(Number(fee))) {
+      const newFeeNum = Number(fee);
+      if (newFeeNum !== task.fee && task.requesterId) {
+        const diff = newFeeNum - task.fee;
+        if (diff > 0) {
+          const reqUser = (await db.user.findUnique({ where: { id: task.requesterId } })) as any;
+          if (reqUser && reqUser.walletBalance < diff) {
+            return NextResponse.json(
+              { success: false, message: "İşverenin cüzdan bakiyesi yeni teklif/fiyat artışını karşılamak için yetersiz." },
+              { status: 400 }
+            );
+          }
+          await db.user.update({
+            where: { id: task.requesterId },
+            data: {
+              walletBalance: { decrement: diff },
+              escrowBalance: { increment: diff },
+            },
+          });
+          await db.transaction.create({
+            data: {
+              userId: task.requesterId,
+              taskId: task.id,
+              taskTitle: task.title,
+              amount: diff,
+              platformFee: 0,
+              type: "escrow_block",
+              status: "completed",
+            },
+          });
+        } else if (diff < 0) {
+          const refund = Math.abs(diff);
+          await db.user.update({
+            where: { id: task.requesterId },
+            data: {
+              walletBalance: { increment: refund },
+              escrowBalance: { decrement: refund },
+            },
+          });
+          await db.transaction.create({
+            data: {
+              userId: task.requesterId,
+              taskId: task.id,
+              taskTitle: task.title,
+              amount: refund,
+              platformFee: 0,
+              type: "wallet_load",
+              status: "completed",
+            },
+          });
+        }
+      }
+      updateData.fee = newFeeNum;
+    }
     if (city) updateData.city = city;
     if (district !== undefined) updateData.district = district;
     if (status) updateData.status = status;
@@ -145,6 +198,7 @@ export async function PATCH(
       if (status) coreData.status = status;
       if (assignedToId !== undefined) coreData.assignedToId = assignedToId;
       if (assignedToName !== undefined) coreData.assignedToName = assignedToName;
+      if (updateData.fee !== undefined) coreData.fee = updateData.fee;
 
       updatedTask = (await db.task.update({
         where: { id },
@@ -153,6 +207,7 @@ export async function PATCH(
     }
 
     const targetAssigneeId = updatedTask.assignedToId || task.assignedToId;
+    const finalFee = typeof updatedTask?.fee === "number" ? updatedTask.fee : task.fee;
 
     // Create DB notifications for both Requester and Worker based on status change
     if (status) {
@@ -168,10 +223,10 @@ export async function PATCH(
           reqMsg = `"${task.title}" görevi görevli tarafından tamamlandı. Lütfen kontrol edip onaylayın.`;
         } else if (status === "completed") {
           reqTitle = "Görev Başarıyla Tamamlandı 🎉";
-          reqMsg = `"${task.title}" görevi başarıyla onaylandı ve ödeme görevliye aktarıldı.`;
+          reqMsg = `"${task.title}" görevi başarıyla onaylandı ve ${finalFee.toLocaleString("tr-TR")} ₺ tutarındaki ödeme görevliye aktarıldı.`;
         } else if (status === "cancelled") {
           reqTitle = "Görev İptal Edildi";
-          reqMsg = `"${task.title}" görevi iptal edildi. Ücret cüzdanınıza iade edildi.`;
+          reqMsg = `"${task.title}" görevi iptal edildi. ${finalFee.toLocaleString("tr-TR")} ₺ cüzdanınıza iade edildi.`;
         }
 
         if (reqTitle) {
@@ -193,7 +248,7 @@ export async function PATCH(
         let wrkMsg = "";
         if (status === "assigned" || status === "in_progress") {
           wrkTitle = "Tebrikler! Görev Size Atandı 🎯";
-          wrkMsg = `"${task.title}" görevi başvurunuz kabul edildi ve size atandı. Göreve başlayabilirsiniz.`;
+          wrkMsg = `"${task.title}" görevi başvurunuz kabul edildi ve size atandı. Görev bedeli: ${finalFee.toLocaleString("tr-TR")} ₺.`;
         } else if (status === "delivered") {
           wrkTitle = "Teslimat Bildirimi Gönderildi ⏳";
           wrkMsg = `"${task.title}" görevi teslim edildi. İşverenin onayı bekleniyor.`;
@@ -219,16 +274,16 @@ export async function PATCH(
       }
     }
 
-    // If task is being completed, release escrow to tasker with commission deduction
+    // If task is being completed, release escrow to tasker with commission deduction based on finalFee
     if (status === "completed" && targetAssigneeId) {
       const settings = await getCommissionSettings();
-      const commission = calculateCommission(task.fee, settings);
-      const netAmount = task.fee - commission;
+      const commission = calculateCommission(finalFee, settings);
+      const netAmount = finalFee - commission;
 
       // Release escrow from requester
       await db.user.update({
         where: { id: task.requesterId },
-        data: { escrowBalance: { decrement: task.fee } },
+        data: { escrowBalance: { decrement: finalFee } },
       });
 
       // Add net amount to tasker's wallet (after commission)
@@ -269,14 +324,14 @@ export async function PATCH(
       }
     }
 
-    // If task is cancelled, refund escrow back to requester's wallet
+    // If task is cancelled, refund escrow back to requester's wallet based on finalFee
     if (status === "cancelled" && task.status !== "completed" && task.status !== "cancelled") {
       // Refund escrow from requester
       await db.user.update({
         where: { id: task.requesterId },
         data: {
-          escrowBalance: { decrement: task.fee },
-          walletBalance: { increment: task.fee },
+          escrowBalance: { decrement: finalFee },
+          walletBalance: { increment: finalFee },
         },
       });
 
@@ -286,7 +341,7 @@ export async function PATCH(
           userId: task.requesterId,
           taskId: task.id,
           taskTitle: `${task.title} - İptal İadesi`,
-          amount: task.fee,
+          amount: finalFee,
           platformFee: 0,
           type: "admin_adjust",
           status: "completed",

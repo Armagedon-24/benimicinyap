@@ -274,24 +274,47 @@ export default function TaskDetailModal() {
           status: 'assigned',
           assignedToId: bid.taskerId,
           assignedToName: bid.taskerName,
+          fee: bid.amount,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        updateTask(task.id, { status: 'assigned', assignedToId: bid.taskerId, assignedToName: bid.taskerName });
+        updateTask(task.id, {
+          status: 'assigned',
+          assignedToId: bid.taskerId,
+          assignedToName: bid.taskerName,
+          fee: bid.amount,
+        });
+
+        // If bid amount differs from original task fee, update requester balance
+        if (currentUser.id === task.requesterId && bid.amount !== task.fee) {
+          const difference = bid.amount - task.fee;
+          if (difference > 0) {
+            updateCurrentUser({
+              walletBalance: currentUser.walletBalance - difference,
+              escrowBalance: currentUser.escrowBalance + difference,
+            });
+          } else if (difference < 0) {
+            updateCurrentUser({
+              walletBalance: currentUser.walletBalance + Math.abs(difference),
+              escrowBalance: Math.max(0, currentUser.escrowBalance - Math.abs(difference)),
+            });
+          }
+        }
+
         addNotification({
           id: crypto.randomUUID(),
           userId: bid.taskerId,
           title: 'Teklifiniz Kabul Edildi',
-          message: `"${task.title}" görevi size atandı.`,
+          message: `"${task.title}" görevi size atandı. Anlaşılan tutar: ${bid.amount.toLocaleString('tr-TR')} ₺`,
           type: 'success',
           read: false,
           createdAt: new Date().toISOString(),
         });
-        addLog(`Teklif kabul edildi: ${bid.taskerName} → ${task.title}`);
+        addLog(`Teklif kabul edildi: ${bid.taskerName} → ${task.title} (${bid.amount} ₺)`);
         showMobileNotificationCard({
           title: 'Teklif Kabul Edildi & Görev Atandı!',
-          message: `"${task.title}" görevi ${bid.taskerName} kullanıcısına başarıyla atandı.`,
+          message: `"${task.title}" görevi ${bid.taskerName} kullanıcısına başarıyla atandı (${formatTL(bid.amount)}).`,
           taskTitle: task.title,
           fee: bid.amount,
           type: 'accept',
@@ -578,9 +601,11 @@ export default function TaskDetailModal() {
       const data = await res.json();
       if (data.success) {
         if (action === 'accept') {
-          toast.success('Pazarlık kabul edildi, görev bütçesi güncellendi!');
+          const newFee = typeof data.newFee === 'number' ? data.newFee : task.fee;
+          toast.success(`Pazarlık kabul edildi! Yeni görev bütçesi: ${newFee.toLocaleString('tr-TR')} ₺`);
+          updateTask(task.id, { fee: newFee });
           if (currentUser && task.requesterId === currentUser.id) {
-            const difference = data.newFee - task.fee;
+            const difference = newFee - task.fee;
             if (difference > 0) {
               updateCurrentUser({
                 walletBalance: currentUser.walletBalance - difference,
@@ -593,6 +618,7 @@ export default function TaskDetailModal() {
               });
             }
           }
+          refetchTasks();
         } else {
           toast.info('Pazarlık teklifi reddedildi');
         }

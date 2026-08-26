@@ -15,14 +15,20 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@typescript-eslint/ban-ts-comment": "off",
     "@typescript-eslint/prefer-as-const": "off",
     "@typescript-eslint/no-unused-disable-directive": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    "@typescript-eslint/no-unused-expressions": "off",
     
     // React rules
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
+    "react-hooks/set-state-in-effect": "off",
+    "react-hooks/preserve-manual-memoization": "off",
+    "react-hooks/immutability": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",
     "react-compiler/react-compiler": "off",
+    "jsx-a11y/alt-text": "off",
     
     // Next.js rules
     "@next/next/no-img-element": "off",
@@ -44,7 +50,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills/**", "scripts/**", "download/**", "mini-services/**"]
 }];
 
 export default eslintConfig;

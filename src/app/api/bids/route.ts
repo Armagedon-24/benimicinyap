@@ -39,12 +39,28 @@ export async function POST(request: NextRequest) {
     const { taskId, taskerId, taskerName, taskerRating, amount, proposalText } =
       body;
 
-    if (!taskId || !taskerId || !amount) {
+    const numAmount = Number(amount);
+    if (!taskId || !taskerId || isNaN(numAmount) || numAmount <= 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "Zorunlu alanlar: taskId, taskerId, amount",
+          message: "Zorunlu alanlar eksik veya teklif tutarı geçersiz.",
         },
+        { status: 400 }
+      );
+    }
+
+    const task = await db.task.findUnique({ where: { id: taskId } });
+    if (!task) {
+      return NextResponse.json(
+        { success: false, message: "Görev bulunamadı" },
+        { status: 404 }
+      );
+    }
+
+    if (task.requesterId === taskerId) {
+      return NextResponse.json(
+        { success: false, message: "Kendi görevinize teklif veremezsiniz" },
         { status: 400 }
       );
     }
@@ -66,20 +82,19 @@ export async function POST(request: NextRequest) {
         taskId,
         taskerId,
         taskerName: taskerName || "",
-        taskerRating: taskerRating || 5.0,
-        amount,
+        taskerRating: taskerRating ? Number(taskerRating) : 5.0,
+        amount: numAmount,
         proposalText: proposalText || "",
       },
     });
 
     // Create notification for task requester
-    const task = await db.task.findUnique({ where: { id: taskId } });
-    if (task && task.requesterId) {
+    if (task.requesterId) {
       await db.notification.create({
         data: {
           userId: task.requesterId,
           title: "Yeni Görev Başvurusu / Teklifi",
-          message: `"${task.title}" göreviniz için ${taskerName || "Bir görevli"} tarafından ${amount.toLocaleString("tr-TR")} ₺ tutarında yeni teklif/başvuru yapıldı.`,
+          message: `"${task.title}" göreviniz için ${taskerName || "Bir görevli"} tarafından ${numAmount.toLocaleString("tr-TR")} ₺ tutarında yeni teklif/başvuru yapıldı.`,
           type: "info",
           read: false,
         },

@@ -61,6 +61,7 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
   const cityPolygonsRef = useRef<any[]>([]);
   const leafletRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
+  const refLayerRef = useRef<any>(null);
   const { theme } = useTheme();
 
   const { currentUser, addLog } = useAppStore();
@@ -83,9 +84,16 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
     const isDark = theme === 'dark';
     tileLayerRef.current.setUrl(
       isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+        : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
     );
+    if (refLayerRef.current) {
+      refLayerRef.current.setUrl(
+        isDark
+          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+      );
+    }
   }, [theme]);
 
   const activeOnlyTasks = useMemo(() => {
@@ -103,6 +111,16 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
   }, [activeOnlyTasks]);
 
   const activeCities = useMemo(() => Object.keys(tasksByCity), [tasksByCity]);
+
+  const activeCitiesRef = useRef(activeCities);
+  useEffect(() => {
+    activeCitiesRef.current = activeCities;
+  }, [activeCities]);
+
+  const tasksByCityRef = useRef(tasksByCity);
+  useEffect(() => {
+    tasksByCityRef.current = tasksByCity;
+  }, [tasksByCity]);
 
   const selectedCityTasks = useMemo(() => {
     if (!selectedCity) return [];
@@ -162,18 +180,31 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
           });
       }
 
-      // Clean, theme-aware map tiles (CartoDB Positron / Dark Matter)
+      // Minimalist Canvas tile layer (Clean, sleek, zero green/river clutter, 100% free)
       const isDarkInit = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
       const tileLayer = L.tileLayer(
         isDarkInit
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
         {
-          maxZoom: 19,
-          subdomains: 'abcd',
+          maxZoom: 16,
+          attribution: '&copy; Esri, DeLorme, NAVTEQ',
         }
       ).addTo(map);
       tileLayerRef.current = tileLayer;
+
+      // Reference layer for city & province labels
+      const refLayer = L.tileLayer(
+        isDarkInit
+          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 16,
+          pane: 'overlayPane',
+          zIndex: 350,
+        }
+      ).addTo(map);
+      refLayerRef.current = refLayer;
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -208,6 +239,59 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
           } catch {}
         }
       });
+
+      // 81 İl Sınırları Katmanı (Tüm Türkiye İlleri - Tıklanabilir & Vurgulanabilir)
+      L.geoJSON(trGeoJSON as any, {
+        style: (feature: any) => {
+          const cityName = feature?.properties?.name;
+          const hasTasks = cityName && activeCitiesRef.current.includes(cityName);
+          return {
+            color: hasTasks ? '#2563eb' : '#64748b',
+            weight: hasTasks ? 1.5 : 0.9,
+            fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+            fillOpacity: hasTasks ? 0.15 : 0.05,
+            opacity: 0.75,
+          };
+        },
+        onEachFeature: (feature: any, layer: any) => {
+          const cityName = feature?.properties?.name;
+          if (!cityName) return;
+          const cityGeo = turkeyCitiesGeo.find((c) => normalizeName(c.name) === normalizeName(cityName));
+
+          layer.on({
+            mouseover: (e: any) => {
+              const target = e.target;
+              target.setStyle({
+                weight: 2.5,
+                color: '#1d4ed8',
+                fillOpacity: 0.28,
+              });
+              if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                target.bringToFront();
+              }
+            },
+            mouseout: (e: any) => {
+              const target = e.target;
+              const hasTasks = activeCitiesRef.current.includes(cityName);
+              target.setStyle({
+                color: hasTasks ? '#2563eb' : '#64748b',
+                weight: hasTasks ? 1.5 : 0.9,
+                fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+                fillOpacity: hasTasks ? 0.15 : 0.05,
+                opacity: 0.75,
+              });
+            },
+            click: () => {
+              if (cityGeo) {
+                flyToCity(L, map, cityGeo, tasksByCityRef.current, onCitySelect, onTaskClick, taskMarkersRef, boundaryRef);
+                setSelectedCity(cityGeo.name);
+                setIsZoomed(true);
+              }
+            },
+          });
+          cityPolygonsRef.current.push(layer);
+        },
+      }).addTo(map);
 
       // Add markers
       const markers = L.layerGroup().addTo(map);
@@ -290,6 +374,33 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
     });
   }, [ready, activeCities, tasksByCity, onCitySelect, onTaskClick]);
 
+  const handleBackToTurkey = useCallback(() => {
+    if (!mapObjRef.current || !leafletRef.current) return;
+    setSelectedCity(null);
+    setIsZoomed(false);
+    onCitySelect?.('');
+    if (boundaryRef.current) {
+      mapObjRef.current.removeLayer(boundaryRef.current);
+      boundaryRef.current = null;
+    }
+    taskMarkersRef.current.forEach((m) => {
+      if (mapObjRef.current!.hasLayer(m)) mapObjRef.current!.removeLayer(m);
+    });
+    taskMarkersRef.current = [];
+    cityPolygonsRef.current.forEach((p: any) => {
+      const cityName = p?.feature?.properties?.name;
+      const hasTasks = cityName && activeCitiesRef.current.includes(cityName);
+      p.setStyle({
+        color: hasTasks ? '#2563eb' : '#64748b',
+        weight: hasTasks ? 1.5 : 0.9,
+        fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+        fillOpacity: hasTasks ? 0.15 : 0.05,
+        opacity: 0.75,
+      });
+    });
+    mapObjRef.current.flyToBounds(defaultBoundsRef.current, { duration: 1.2, padding: [10, 10], easeLinearity: 0.25 });
+  }, [onCitySelect]);
+
   // Sync with external selectedCity prop
   useEffect(() => {
     if (!ready || selectedCityProp === undefined) return;
@@ -305,26 +416,7 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
     } else if (!selectedCityProp && selectedCity && mapObjRef.current) {
       handleBackToTurkey();
     }
-  }, [selectedCityProp, ready]);
-
-  const handleBackToTurkey = useCallback(() => {
-    if (!mapObjRef.current || !leafletRef.current) return;
-    setSelectedCity(null);
-    setIsZoomed(false);
-    onCitySelect?.('');
-    if (boundaryRef.current) {
-      mapObjRef.current.removeLayer(boundaryRef.current);
-      boundaryRef.current = null;
-    }
-    taskMarkersRef.current.forEach((m) => {
-      if (mapObjRef.current!.hasLayer(m)) mapObjRef.current!.removeLayer(m);
-    });
-    taskMarkersRef.current = [];
-    cityPolygonsRef.current.forEach((p: any) => {
-      p.setStyle({ fillOpacity: 0.15, color: 'transparent', weight: 0 });
-    });
-    mapObjRef.current.flyToBounds(defaultBoundsRef.current, { duration: 1.5, padding: [10, 10], easeLinearity: 0.25 });
-  }, [onCitySelect]);
+  }, [selectedCityProp, ready, handleBackToTurkey, selectedCity, tasksByCity, onCitySelect, onTaskClick]);
 
   const formatTL = (amount: number) =>
     new Intl.NumberFormat('tr-TR').format(amount) + ' ₺';
@@ -660,9 +752,9 @@ function getCityStatusBreakdown(tasks: Task[]): StatusBreakdown {
 }
 
 function createStatusIcon(L: any, count: number, breakdown: StatusBreakdown) {
-  const displayCount = count > 99 ? '99+' : count > 9 ? String(count) : String(count);
-  const size = 38; // slightly larger to hold the glow
-  const r = size / 2 - 4;
+  const displayCount = count > 99 ? '99+' : String(count);
+  const size = 34; // compact task count badge
+  const r = size / 2 - 3;
   const cx = size / 2;
   const cy = size / 2;
 
@@ -722,7 +814,7 @@ function createStatusIcon(L: any, count: number, breakdown: StatusBreakdown) {
     <g ${filterAttr}>
       ${segmentsSvg}
     </g>
-    <circle cx="${cx}" cy="${cy}" r="${r - 6}" fill="white" class="dark:fill-[#0B0C16]"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - 5}" fill="white" class="dark:fill-[#0B0C16]"/>
     <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle" fill="${isDark ? '#4ade80' : breakdown.dominantColor}" font-size="10" font-weight="900" font-family="system-ui" class="dark:fill-[#4ade80]">${displayCount}</text>
   </svg>`;
 
@@ -752,14 +844,14 @@ function buildCityTooltip(cityName: string, total: number, breakdown: StatusBrea
 }
 
 function createInactiveIcon(L: any) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">
-    <circle cx="5" cy="5" r="3.5" fill="#94a3b8" opacity="0.5" stroke="white" stroke-width="1"/>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+    <circle cx="4" cy="4" r="3" fill="#94a3b8" opacity="0.6" stroke="white" stroke-width="1"/>
   </svg>`;
   return L.divIcon({
     html: svg,
     className: 'task-marker-label',
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
+    iconSize: [8, 8],
+    iconAnchor: [4, 4],
   });
 }
 

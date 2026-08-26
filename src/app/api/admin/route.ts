@@ -74,12 +74,13 @@ export async function POST(request: NextRequest) {
 
     if (action === "adjust-balance") {
       const { userId, amount } = body;
+      const numAmount = Number(amount);
 
-      if (!userId || amount === undefined) {
+      if (!userId || isNaN(numAmount) || !isFinite(numAmount)) {
         return NextResponse.json(
           {
             success: false,
-            message: "Zorunlu alanlar: userId, amount",
+            message: "Geçersiz veya eksik parametreler: userId, amount zorunludur ve sayı olmalıdır.",
           },
           { status: 400 }
         );
@@ -96,17 +97,17 @@ export async function POST(request: NextRequest) {
 
       const updatedUser = await db.user.update({
         where: { id: userId },
-        data: { walletBalance: { increment: amount } },
+        data: { walletBalance: { increment: numAmount } },
       });
 
       // Create admin_adjust transaction
       await db.transaction.create({
         data: {
           userId,
-          amount,
+          amount: Math.abs(numAmount),
           type: "admin_adjust",
           status: "completed",
-          taskTitle: `Yönetici bakiye ayarlaması (${amount > 0 ? "+" : ""}${amount} ₺)`,
+          taskTitle: `Yönetici bakiye ayarlaması (${numAmount > 0 ? "+" : ""}${numAmount} ₺)`,
         },
       });
 
