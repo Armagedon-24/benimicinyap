@@ -42,41 +42,40 @@ export function SecurityModal() {
           <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
             <Lock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-semibold text-sm">AES-256 Şifreleme</h4>
+              <h4 className="font-semibold text-sm">Oturum ve Yetki Koruması</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                Tüm kullanıcı verileri ve iletişim kayıtları AES-256 bit standartlarında şifrelenerek saklanır.
-                Verilerimize erişim sağlasalar bile içeriği okuyamazlar.
+                Oturumlar HttpOnly imzalı cookie ile korunur. Hassas API işlemleri sunucu tarafında kullanıcı ve rol
+                kontrolünden geçer; istemcinin gönderdiği kullanıcı kimliği tek başına yetki sağlamaz.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
             <Eye className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-semibold text-sm">Sıfır Bilgi Mimarı (Zero-Knowledge)</h4>
+              <h4 className="font-semibold text-sm">Parola Güvenliği</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                Platform olarak kullanıcıların şifrelerini plaintext olarak saklamıyoruz.
-                T.C. Kimlik doğrulaması sırasında verileriniz doğrulama sunucusuna şifreli iletilir.
+                Yeni parolalar scrypt ile hashlenir ve düz metin olarak API yanıtlarına dahil edilmez. Eski kayıtlar
+                güvenli giriş sonrası otomatik olarak hashlenmiş biçime geçirilir.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30">
             <Shield className="w-5 h-5 text-purple-600 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-semibold text-sm">Escrow Güvence Sistemi</h4>
+              <h4 className="font-semibold text-sm">Finansal İşlem Bütünlüğü</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                Ödemeler görev tamamlanıp onaylanana kadar güvence havuzunda bloke edilir.
-                Görevli işi yaptığında parasını alamama riskiyle karşılaşmaz.
-                Para sisteme önceden yatırılmıştır.
+                Cüzdan, escrow ve ödeme callback güncellemeleri veritabanı transaction’larıyla yürütülür.
+                Tekrarlanan ödeme bildirimleri ikinci kez bakiye yazamaz.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
             <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-semibold text-sm">3D Secure Ödeme</h4>
+              <h4 className="font-semibold text-sm">İzleme ve Rate Limit</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                Tüm finansal işlemler banka düzeyinde 3D Secure doğrulama ile korunmaktadır.
-                Kredi kartı bilgileriniz platformda saklanmaz.
+                Başarısız ve kritik işlemler güvenlik olayları olarak kaydedilir. Giriş ve kayıt uçları kötüye
+                kullanım denemelerini yavaşlatan rate limit korumasına sahiptir.
               </p>
             </div>
           </div>
@@ -166,18 +165,18 @@ export function NotificationsPanel() {
     notifications,
     markAllRead,
     setNotifications,
+    currentUser,
   } = useAppStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleMarkAllRead = async () => {
     markAllRead();
     try {
-      const user = JSON.parse(localStorage.getItem('current_user') || '{}');
-      if (user.id) {
+      if (currentUser?.id) {
         await fetch('/api/notifications?action=mark-read', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
+          body: JSON.stringify({}),
         });
       }
     } catch { /* silent */ }
@@ -186,9 +185,8 @@ export function NotificationsPanel() {
   const handleClearAll = async () => {
     setNotifications([]);
     try {
-      const user = JSON.parse(localStorage.getItem('current_user') || '{}');
-      if (user.id) {
-        await fetch(`/api/notifications?userId=${user.id}`, { method: 'DELETE' });
+      if (currentUser?.id) {
+        await fetch('/api/notifications', { method: 'DELETE' });
       }
     } catch { /* silent */ }
   };

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const userId = auth.user!.id;
 
     if (!userId) {
       return NextResponse.json(
@@ -30,8 +33,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
-    const { userId, title, message, type } = body;
+    const { title, message, type } = body;
+    const userId = auth.user!.id;
 
     if (!userId || !title || !message) {
       return NextResponse.json(
@@ -64,6 +70,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
     const { notificationId } = body;
 
@@ -74,7 +82,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const notification = await db.notification.update({
+    const notification = await db.notification.updateMany({
       where: { id: notificationId },
       data: { read: true },
     });
@@ -91,8 +99,10 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const userId = auth.user!.id;
 
     if (!userId) {
       return NextResponse.json(

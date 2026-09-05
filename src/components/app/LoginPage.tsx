@@ -50,7 +50,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const data = await res.json();
       if (data.success) {
         login(data.user);
-        localStorage.setItem('current_user', JSON.stringify(data.user));
         addLog(`Kullanıcı giriş yaptı: ${data.user.fullName} (${data.user.email})`);
         toast.success(`Hoş geldiniz, ${data.user.fullName}!`);
         onLoginSuccess();
@@ -91,7 +90,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const data = await res.json();
       if (data.success) {
         login(data.user);
-        localStorage.setItem('current_user', JSON.stringify(data.user));
         addLog(`Yeni kullanıcı kaydı: ${data.user.fullName} (${data.user.email})`);
         toast.success('Kayıt başarılı! Hoş geldiniz!');
         onLoginSuccess();

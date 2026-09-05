@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { allowRateLimit, hashPassword, isPasswordHash, setSession, verifyPassword } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!allowRateLimit(request, "login", 10)) {
+      return NextResponse.json({ success: false, message: "Çok fazla deneme. Lütfen daha sonra tekrar deneyin." }, { status: 429 });
+    }
     const body = await request.json();
     const { email, password } = body;
 
@@ -24,20 +28,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user.password !== password) {
+    if (!verifyPassword(password, user.password)) {
       return NextResponse.json(
         { success: false, message: "Şifre hatalı" },
         { status: 401 }
       );
     }
 
-    // Return user without password
-    const { password: _, ...userWithoutPassword } = user;
+    if (!isPasswordHash(user.password)) {
+      await db.user.update({ where: { id: user.id }, data: { password: hashPassword(password) } });
+    }
 
-    return NextResponse.json({
+    const { password: _, ...userWithoutPassword } = user;
+    const response = NextResponse.json({
       success: true,
       user: userWithoutPassword,
     });
+    return setSession(response, user.id);
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(

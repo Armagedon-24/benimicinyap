@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCommissionSettings, calculateCommission } from "@/lib/commission";
+import { requireAdmin } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
 
@@ -69,6 +72,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
     const { action } = body;
 
@@ -218,6 +223,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("id");
 

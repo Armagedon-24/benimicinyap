@@ -35,21 +35,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.redirect(new URL("/?payment=failed&reason=transaction_not_found", request.url));
       }
 
-      // If it's already completed, just redirect
       if (transaction.status === "completed") {
         return NextResponse.redirect(new URL(`/?payment=success&amount=${transaction.amount}`, request.url));
       }
 
-      // Update transaction status to completed
-      await db.transaction.update({
-        where: { id: transactionId },
-        data: { status: "completed" }
-      });
-
-      // Update user wallet balance
-      await db.user.update({
-        where: { id: transaction.userId },
-        data: { walletBalance: { increment: transaction.amount } }
+      await db.$transaction(async (tx) => {
+        const claimed = await tx.transaction.updateMany({ where: { id: transactionId, status: "pending" }, data: { status: "completed" } });
+        if (claimed.count !== 1) return;
+        await tx.user.update({ where: { id: transaction.userId }, data: { walletBalance: { increment: transaction.amount } } });
       });
 
       return NextResponse.redirect(new URL(`/?payment=success&amount=${transaction.amount}`, request.url));

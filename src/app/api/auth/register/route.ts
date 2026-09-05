@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { allowRateLimit, hashPassword, setSession } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!allowRateLimit(request, "register", 5, 10 * 60_000)) {
+      return NextResponse.json({ success: false, message: "Çok fazla kayıt denemesi. Lütfen daha sonra tekrar deneyin." }, { status: 429 });
+    }
     const body = await request.json();
     const { email, password, fullName, city, tcNo, bio } = body;
 
@@ -28,7 +32,7 @@ export async function POST(request: NextRequest) {
     const user = await db.user.create({
       data: {
         email,
-        password,
+        password: hashPassword(password),
         fullName,
         city: city || "",
         tcNo: tcNo || "",
@@ -45,10 +49,11 @@ export async function POST(request: NextRequest) {
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       user: userWithoutPassword,
     });
+    return setSession(response, user.id);
   } catch (error) {
     console.error("Register error:", error);
     return NextResponse.json(

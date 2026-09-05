@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, omitPassword } from '@/lib/db';
+import { requireUser } from '@/lib/security';
 
 // GET /api/users/profile?userId=xxx
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ success: false, message: 'userId gerekli' }, { status: 400 });
+    const requestedUserId = searchParams.get('userId');
+    const userId = auth.user!.id;
+    if (requestedUserId && requestedUserId !== userId && auth.user!.role !== 'admin') {
+      return NextResponse.json({ success: false, message: 'Bu profile erişim yok' }, { status: 403 });
     }
 
     const user = (await db.user.findUnique({ where: { id: userId } })) as any;
@@ -44,12 +47,11 @@ export async function GET(req: NextRequest) {
 // PATCH /api/users/profile
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
     const body = await req.json();
-    const { userId, ...updateData } = body;
-
-    if (!userId) {
-      return NextResponse.json({ success: false, message: 'userId gerekli' }, { status: 400 });
-    }
+    const { ...updateData } = body;
+    const userId = auth.user!.id;
 
     // Only allow updating these fields
     const allowedFields = ['fullName', 'city', 'bio', 'darkMode', 'isOnline'];

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCommissionSettings, calculateCommission } from "@/lib/commission";
+import { requireUser } from "@/lib/security";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { id } = await params;
 
     const task = await db.task.findUnique({
@@ -21,7 +24,6 @@ export async function GET(
             tcVerified: true,
             completedTasksCount: true,
             totalReviews: true,
-            walletBalance: true,
             role: true,
           },
         },
@@ -34,7 +36,6 @@ export async function GET(
             tcVerified: true,
             completedTasksCount: true,
             totalReviews: true,
-            walletBalance: true,
             role: true,
           },
         },
@@ -50,7 +51,6 @@ export async function GET(
                 tcVerified: true,
                 completedTasksCount: true,
                 totalReviews: true,
-                walletBalance: true,
                 role: true,
               },
             },
@@ -71,6 +71,9 @@ export async function GET(
         { status: 404 }
       );
     }
+    if (task.requesterId !== auth.user!.id && task.assignedToId !== auth.user!.id && auth.user!.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Bu görevin detaylarına erişim yok" }, { status: 403 });
+    }
 
     return NextResponse.json({ success: true, task });
   } catch (error) {
@@ -87,6 +90,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { id } = await params;
     const body = await request.json();
     const {
@@ -112,6 +117,12 @@ export async function PATCH(
         { success: false, message: "Görev bulunamadı" },
         { status: 404 }
       );
+    }
+    if (task.requesterId !== auth.user!.id && task.assignedToId !== auth.user!.id && auth.user!.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Bu görevi değiştirme yetkiniz yok" }, { status: 403 });
+    }
+    if (status === "completed" && task.requesterId !== auth.user!.id && auth.user!.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Görevi yalnızca işveren veya yönetici tamamlayabilir" }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -364,6 +375,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { id } = await params;
     const task = await db.task.findUnique({ where: { id } });
 
@@ -372,6 +385,9 @@ export async function DELETE(
         { success: false, message: "Görev bulunamadı" },
         { status: 404 }
       );
+    }
+    if (task.requesterId !== auth.user!.id && auth.user!.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Bu görevi silme yetkiniz yok" }, { status: 403 });
     }
 
     // Refund escrow balance to requester if task was active

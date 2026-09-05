@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCommissionSettings, calculateWithdrawFee } from "@/lib/commission";
 import { IyzicoClient, IyzicoLocale, IyzicoCurrency, IyzicoPaymentGroup, IyzicoBasketItemType } from "@/lib/iyzico";
 import crypto from "crypto";
+import { requireUser } from "@/lib/security";
 
 const iyzicoClient = new IyzicoClient({
   apiKey: process.env.IYZICO_API_KEY || 'sandbox-tA3W5w07hO3U71XyYfFh4H7m6R54B7C9',
@@ -12,11 +13,14 @@ const iyzicoClient = new IyzicoClient({
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
     const { action } = body;
 
     if (action === "initialize_payment") {
-      const { userId, amount, provider } = body;
+      const { amount, provider } = body;
+      const userId = auth.user!.id;
 
       if (!userId || !amount || !provider) {
         return NextResponse.json(
@@ -25,7 +29,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (amount <= 0) {
+      const numericAmount = Number(amount);
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
         return NextResponse.json(
           { success: false, message: "Tutar sıfırdan büyük olmalıdır" },
           { status: 400 }
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
       const transaction = await db.transaction.create({
         data: {
           userId,
-          amount,
+          amount: numericAmount,
           type: "wallet_load",
           status: "pending",
           taskTitle: `${provider.toUpperCase()} Bakiye Yükleme`,
@@ -58,8 +63,8 @@ export async function POST(request: NextRequest) {
         const iyziRequest = {
           locale: IyzicoLocale.TR,
           conversationId: transaction.id,
-          price: amount.toFixed(2),
-          paidPrice: amount.toFixed(2),
+          price: numericAmount.toFixed(2),
+          paidPrice: numericAmount.toFixed(2),
           currency: IyzicoCurrency.TRY,
           basketId: transaction.id,
           paymentGroup: IyzicoPaymentGroup.PRODUCT,
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
               name: 'Cüzdan Bakiye Yükleme',
               category1: 'Cüzdan',
               itemType: IyzicoBasketItemType.VIRTUAL,
-              price: amount.toFixed(2)
+              price: numericAmount.toFixed(2)
             }
           ]
         };
@@ -141,7 +146,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "load") {
-      const { userId, amount, cardId } = body;
+      const { amount, cardId } = body;
+      const userId = auth.user!.id;
 
       if (!userId || !amount || !cardId) {
         return NextResponse.json(
@@ -153,27 +159,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (amount <= 0) {
+      const numericAmount = Number(amount);
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
         return NextResponse.json(
           { success: false, message: "Yüklenme tutarı sıfırdan büyük olmalıdır" },
           { status: 400 }
         );
       }
 
-      // Add to wallet
-      const updatedUser = await db.user.update({
-        where: { id: userId },
-        data: { walletBalance: { increment: amount } },
-      });
+      const card = await db.paymentCard.findFirst({ where: { id: cardId, userId } });
+      if (!card) {
+        return NextResponse.json({ success: false, message: "Kart kullanıcıya ait değil" }, { status: 403 });
+      }
 
-      // Create transaction
-      const transaction = await db.transaction.create({
-        data: {
-          userId,
-          amount,
-          type: "wallet_load",
-          status: "completed",
-        },
+      // Add to wallet
+      const { updatedUser, transaction } = await db.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({ where: { id: userId }, data: { walletBalance: { increment: numericAmount } } });
+        const transaction = await tx.transaction.create({ data: { userId, amount: numericAmount, type: "wallet_load", status: "completed" } });
+        return { updatedUser, transaction };
       });
 
       const { password: _, ...userWithoutPassword } = updatedUser;
@@ -186,7 +189,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "withdraw") {
-      const { userId, amount, bankName, iban, accountName } = body;
+      const { amount, bankName, iban, accountName } = body;
+      const userId = auth.user!.id;
 
       if (!userId || !amount || !bankName || !iban || !accountName) {
         return NextResponse.json(
@@ -194,16 +198,6 @@ export async function POST(request: NextRequest) {
             success: false,
             message:
               "Zorunlu alanlar: userId, amount, bankName, iban, accountName",
-          },
-          { status: 400 }
-        );
-      }
-
-      if (amount <= 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Çekim tutarı sıfırdan büyük olmalıdır",
           },
           { status: 400 }
         );
@@ -218,9 +212,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const numericAmount = Number(amount);
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return NextResponse.json({ success: false, message: "Çekim tutarı geçersiz" }, { status: 400 });
+      }
       const settings = await getCommissionSettings();
-      const withdrawFee = calculateWithdrawFee(amount, settings);
-      const totalDeduction = amount + withdrawFee;
+      const withdrawFee = calculateWithdrawFee(numericAmount, settings);
+      const totalDeduction = numericAmount + withdrawFee;
 
       if (user.walletBalance < totalDeduction) {
         return NextResponse.json(
@@ -230,21 +228,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Deduct from wallet (amount + fee)
-      const updatedUser = await db.user.update({
-        where: { id: userId },
-        data: { walletBalance: { decrement: totalDeduction } },
-      });
-
-      // Create withdraw transaction with platformFee
-      const transaction = await db.transaction.create({
-        data: {
-          userId,
-          amount,
-          platformFee: withdrawFee,
-          type: "wallet_withdraw",
-          status: "completed",
-          taskTitle: `${bankName} - ${iban} - ${accountName}`,
-        },
+      const { updatedUser, transaction } = await db.$transaction(async (tx) => {
+        const updatedUser = await tx.user.updateMany({ where: { id: userId, walletBalance: { gte: totalDeduction } }, data: { walletBalance: { decrement: totalDeduction } } });
+        if (updatedUser.count !== 1) throw new Error("Insufficient wallet balance");
+        const transaction = await tx.transaction.create({ data: { userId, amount: numericAmount, platformFee: withdrawFee, type: "wallet_withdraw", status: "completed", taskTitle: `${bankName} - ${iban} - ${accountName}` } });
+        const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+        return { updatedUser: user, transaction };
       });
 
       const { password: _, ...userWithoutPassword } = updatedUser;
@@ -271,8 +260,10 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const userId = auth.user!.id;
 
     if (!userId) {
       return NextResponse.json(

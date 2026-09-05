@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { clearStore, initStore } from "@/lib/db";
+import { requireAdmin, securityEvent } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
     const force = searchParams.get("force") === "true";
 
@@ -15,8 +18,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    clearStore();
-    initStore();
+    await clearStore();
+    await initStore();
+    await securityEvent("database_seed", `force=${force}`, auth.user?.id);
 
     return NextResponse.json({
       success: true,

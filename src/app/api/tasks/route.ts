@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +39,6 @@ export async function GET(request: NextRequest) {
             tcVerified: true,
             completedTasksCount: true,
             totalReviews: true,
-            walletBalance: true,
             role: true,
           },
         },
@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
     const {
       title,
@@ -69,11 +71,10 @@ export async function POST(request: NextRequest) {
       dueDate,
       latitude,
       longitude,
-      requesterId,
     } = body;
 
     const numFee = Number(fee);
-    if (!title || !description || !city || !category || isNaN(numFee) || numFee <= 0 || !requesterId) {
+    if (!title || !description || !city || !category || isNaN(numFee) || numFee <= 0) {
       return NextResponse.json(
         {
           success: false,
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     // Check user has enough wallet balance
     const user = (await db.user.findUnique({
-      where: { id: requesterId },
+      where: { id: auth.user!.id },
     })) as any;
 
     if (!user) {
@@ -105,40 +106,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create task
-    const task = await db.task.create({
-      data: {
-        title,
-        description,
-        city,
-        district: district || "",
-        category,
-        fee,
-        dueDate: dueDate || "",
-        latitude: latitude || 36.8841,
-        longitude: longitude || 30.7056,
-        requesterId,
-      },
-    });
-
-    // Deduct fee from wallet and create escrow_block transaction
-    await db.user.update({
-      where: { id: requesterId },
-      data: {
-        walletBalance: { decrement: fee },
-        escrowBalance: { increment: fee },
-      },
-    });
-
-    await db.transaction.create({
-      data: {
-        userId: requesterId,
-        taskId: task.id,
-        taskTitle: task.title,
-        amount: fee,
-        type: "escrow_block",
-        status: "completed",
-      },
+    const task = await db.$transaction(async (tx) => {
+      const created = await tx.task.create({
+        data: {
+          title,
+          description,
+          city,
+          district: district || "",
+          category,
+          fee: numFee,
+          dueDate: dueDate || "",
+          latitude: latitude || 36.8841,
+          longitude: longitude || 30.7056,
+          requesterId: auth.user!.id,
+        },
+      });
+      const debit = await tx.user.updateMany({
+        where: { id: auth.user!.id, walletBalance: { gte: numFee } },
+        data: { walletBalance: { decrement: numFee }, escrowBalance: { increment: numFee } },
+      });
+      if (debit.count !== 1) throw new Error("Insufficient wallet balance");
+      await tx.transaction.create({
+        data: { userId: auth.user!.id, taskId: created.id, taskTitle: created.title, amount: numFee, type: "escrow_block", status: "completed" },
+      });
+      return created;
     });
 
     return NextResponse.json({ success: true, task });

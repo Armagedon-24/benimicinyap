@@ -86,10 +86,10 @@ export default function AppHeader() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     addLog(`Kullanıcı çıkış yaptı: ${currentUser.fullName}`);
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     logout();
-    localStorage.removeItem('current_user');
     setTheme('light');
   };
 

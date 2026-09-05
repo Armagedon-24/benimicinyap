@@ -58,14 +58,15 @@ export default function Home() {
 
   const loadUserSession = useCallback(async (): Promise<User | null> => {
     try {
-      const savedUser = localStorage.getItem('current_user');
-      if (savedUser) {
-        const user: User = JSON.parse(savedUser);
+      const response = await fetch('/api/auth/me', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        const user: User = data.user;
         login(user);
         if (user.darkMode) setTheme('dark');
         return user;
       }
-    } catch { /* corrupted data */ }
+    } catch { /* unauthenticated or expired session */ }
     return null;
   }, [login, setTheme]);
 
@@ -96,13 +97,11 @@ export default function Home() {
           setWalletBalance(updatedUser.walletBalance);
           setEscrowBalance(updatedUser.escrowBalance);
           updateCurrentUser(updatedUser);
-          localStorage.setItem('current_user', JSON.stringify(updatedUser));
           return;
         }
       } else if (profileRes.status === 404 || profileRes.status === 400) {
         // User not found in DB - session is invalid/expired!
         logout();
-        localStorage.removeItem('current_user');
         toast.error("Oturumunuz sonlandırıldı veya sıfırlandı. Lütfen tekrar giriş yapın.");
         return;
       }

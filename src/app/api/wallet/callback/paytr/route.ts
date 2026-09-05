@@ -39,16 +39,10 @@ export async function POST(request: NextRequest) {
 
     if (status === "success") {
       if (transaction.status !== "completed") {
-        // Update transaction status to completed
-        await db.transaction.update({
-          where: { id: merchantOid },
-          data: { status: "completed" }
-        });
-
-        // Update user wallet balance
-        await db.user.update({
-          where: { id: transaction.userId },
-          data: { walletBalance: { increment: transaction.amount } }
+        await db.$transaction(async (tx) => {
+          const claimed = await tx.transaction.updateMany({ where: { id: merchantOid, status: "pending" }, data: { status: "completed" } });
+          if (claimed.count !== 1) return;
+          await tx.user.update({ where: { id: transaction.userId }, data: { walletBalance: { increment: transaction.amount } } });
         });
 
         console.log(`PayTR payment success. Credited ${transaction.amount} to user ${transaction.userId}`);

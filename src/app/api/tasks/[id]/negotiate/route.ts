@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { id: taskId } = await params;
     const body = await request.json();
     const { messageId, action } = body;
@@ -39,6 +42,9 @@ export async function POST(
         { success: false, message: "Görev bulunamadı" },
         { status: 404 }
       );
+    }
+    if (task.requesterId !== auth.user!.id && task.assignedToId !== auth.user!.id && auth.user!.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Bu görevde pazarlık yetkiniz yok" }, { status: 403 });
     }
 
     if (action === "reject") {

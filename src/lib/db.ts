@@ -1,4 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import crypto from 'node:crypto';
+
+function hashSeedPassword(password: string): string {
+  const salt = crypto.createHash('sha256').update(`seed:${password}`).digest('hex').slice(0, 32);
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -44,7 +51,7 @@ export async function initStore() {
       data: {
         id: 'user-admin',
         email: 'hakan_varlik24@hotmail.com',
-        password: 'Hakan_1251',
+        password: hashSeedPassword('Hakan_1251'),
         fullName: 'Sistem Yöneticisi',
         city: 'Antalya',
         role: 'admin',
@@ -59,7 +66,7 @@ export async function initStore() {
       data: {
         id: 'user-hakan',
         email: 'hakanvarlik24.HV@gmail.com',
-        password: 'user123',
+        password: hashSeedPassword('user123'),
         fullName: 'Hakan Varlık',
         city: 'Antalya',
         role: 'user',
@@ -76,7 +83,7 @@ export async function initStore() {
       data: {
         id: 'user-elif',
         email: 'elif@gmail.com',
-        password: 'user123',
+        password: hashSeedPassword('user123'),
         fullName: 'Elif Kaya',
         city: 'İzmir',
         role: 'user',
@@ -93,7 +100,7 @@ export async function initStore() {
       data: {
         id: 'user-mehmet',
         email: 'mehmet@gmail.com',
-        password: 'user123',
+        password: hashSeedPassword('user123'),
         fullName: 'Mehmet Yılmaz',
         city: 'Ankara',
         role: 'user',
@@ -110,7 +117,7 @@ export async function initStore() {
       data: {
         id: 'user-ayse',
         email: 'ayse@gmail.com',
-        password: 'user123',
+        password: hashSeedPassword('user123'),
         fullName: 'Ayşe Demir',
         city: 'Bursa',
         role: 'user',
@@ -127,7 +134,7 @@ export async function initStore() {
       data: {
         id: 'user-ahmet',
         email: 'ahmet@gmail.com',
-        password: 'user123',
+        password: hashSeedPassword('user123'),
         fullName: 'Ahmet Çelik',
         city: 'Istanbul',
         role: 'user',

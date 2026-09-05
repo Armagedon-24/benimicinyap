@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 // Checks if the T.C. Kimlik Number is mathematically valid using the national checksum algorithm
 function validateTCNo(tcNo: string): boolean {
@@ -23,8 +24,11 @@ function validateTCNo(tcNo: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
-    const { userId, tcNo, fullName, birthYear } = body;
+    const { tcNo, fullName, birthYear } = body;
+    const userId = auth.user!.id;
 
     if (!userId || !tcNo || !fullName || !birthYear) {
       return NextResponse.json(

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCommissionSettings } from "@/lib/commission";
+import { requireAdmin } from "@/lib/security";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     // Total platform commission earned
     const commissionTxs: any[] = await db.transaction.findMany({
       where: { type: "platform_commission", status: "completed" },

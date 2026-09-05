@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireUser } from '@/lib/security';
 
 // GET /api/reviews?taskId=xxx&userId=xxx
 export async function GET(req: NextRequest) {
@@ -34,8 +35,11 @@ export async function GET(req: NextRequest) {
 // POST /api/reviews — submit a rating
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
     const body = await req.json();
-    const { taskId, fromUserId, fromUserName, toUserId, toUserName, rating, comment, fromRole } = body;
+    const { taskId, fromUserName, toUserId, toUserName, rating, comment, fromRole } = body;
+    const fromUserId = auth.user!.id;
 
     if (!taskId || !fromUserId || !toUserId || !rating) {
       return NextResponse.json({ success: false, message: 'Eksik alanlar' }, { status: 400 });
@@ -55,6 +59,9 @@ export async function POST(req: NextRequest) {
 
     // Get task title
     const task: any = await db.task.findUnique({ where: { id: taskId } });
+    if (!task || (task.requesterId !== fromUserId && task.assignedToId !== fromUserId) || (toUserId !== task.requesterId && toUserId !== task.assignedToId)) {
+      return NextResponse.json({ success: false, message: 'Bu görev için yorum yetkiniz yok' }, { status: 403 });
+    }
 
     // Create review
     const review = await db.review.create({

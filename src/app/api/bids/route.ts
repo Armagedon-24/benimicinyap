@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,9 +36,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
     const body = await request.json();
-    const { taskId, taskerId, taskerName, taskerRating, amount, proposalText } =
+    const { taskId, taskerName, taskerRating, amount, proposalText } =
       body;
+    if (auth.response) return auth.response;
+    const taskerId = auth.user!.id;
 
     const numAmount = Number(amount);
     if (!taskId || !taskerId || isNaN(numAmount) || numAmount <= 0) {

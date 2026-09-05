@@ -116,6 +116,9 @@ model Message {
   senderId  String
   senderName String
   content   String
+  isNegotiation Boolean @default(false)
+  negotiationPrice Float?
+  negotiationStatus String @default("none")
   createdAt DateTime @default(now())
 
   task     Task  @relation(fields: [taskId], references: [id])

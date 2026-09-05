@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
+    if (auth.response) return auth.response;
     const { searchParams } = new URL(request.url);
     const taskId = searchParams.get("taskId");
 
@@ -13,8 +16,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const task = await db.task.findUnique({ where: { id: taskId } });
+    if (!task || (task.requesterId !== auth.user!.id && task.assignedToId !== auth.user!.id)) {
+      return NextResponse.json({ success: false, message: "Bu görevin mesajlarına erişim yok" }, { status: 403 });
+    }
     const messages = await db.message.findMany({
-      where: { taskId },
+      where: { taskId, OR: [{ senderId: auth.user!.id }, { receiverId: auth.user!.id }] },
       orderBy: { createdAt: "asc" },
       include: {
         sender: {
@@ -38,8 +45,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request);
     const body = await request.json();
-    const { taskId, senderId, senderName, content, receiverId, isNegotiation, negotiationPrice, negotiationStatus } = body;
+    if (auth.response) return auth.response;
+    const { taskId, senderName, content, receiverId, isNegotiation, negotiationPrice, negotiationStatus } = body;
+    const senderId = auth.user!.id;
 
     if (!taskId || !senderId || !content || !receiverId) {
       return NextResponse.json(
@@ -51,6 +61,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const task = await db.task.findUnique({ where: { id: taskId } });
+    if (!task || (task.requesterId !== senderId && task.assignedToId !== senderId)) {
+      return NextResponse.json({ success: false, message: "Bu göreve mesaj gönderme yetkiniz yok" }, { status: 403 });
+    }
+    if (receiverId !== task.requesterId && receiverId !== task.assignedToId) {
+      return NextResponse.json({ success: false, message: "Geçersiz mesaj alıcısı" }, { status: 400 });
+    }
     const message = await db.message.create({
       data: {
         taskId,

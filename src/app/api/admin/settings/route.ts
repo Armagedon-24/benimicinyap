@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { clearSettingsCache } from "@/lib/commission";
+import { requireAdmin } from "@/lib/security";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const settings = await db.platformSetting.findMany({
       orderBy: { group: "asc" },
     });
@@ -19,6 +22,8 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
     const { settings } = body;
 
