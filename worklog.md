@@ -26,3 +26,24 @@ Stage Summary:
 - Commission system fully operational with admin-configurable settings
 - Map redesigned to match uploaded image with clean CartoDB tiles and green markers
 - All 10 tasks completed successfully
+---
+Task ID: 2
+Agent: Z.ai Main Agent (web ortamına taşıma)
+Task: Projeyi GitHub'dan bu çalışma ortamına aktarma ve çalışır hale getirme
+
+Work Log:
+- Repo klonlandı: https://github.com/Armagedon-24/benimicinyap.git (HEAD: b11a8c9)
+- Proje dosyaları ortam kök dizinine taşındı; git geçmişi ve origin korundu
+- Prisma schema PostgreSQL -> SQLite uyarlandı (provider=sqlite, url=DATABASE_URL)
+- next.config.ts ortam için birleştirildi (standalone output + typescript.ignoreBuildErrors eklendi, optimizeCss sadece production)
+- package.json birleştirildi: leaflet, react-leaflet, @types/leaflet, critters eklendi; dev scripti --webpack yapıldı
+- react/react-dom 19.2.3 olarak pinlendi (Turbopack/React sürüm uyuşmazlığı giderildi)
+- bun install + prisma db push ile bağımlılıklar ve şema senkronize edildi
+- db/custom.db eski tohum verisi içerdiği için scripts/reset-db.ts ile güncel tohum verisi yeniden yüklendi (6 kullanıcı, 6 görev, 14 ayar)
+- Dev sunucusu 3000 portunda çalışır duruma getirildi
+- Agent Browser ile uçtan uca doğrulandı: giriş sayfası, admin girişi (hakan_varlik24@hotmail.com), keşfet sayfası + Türkiye haritası, admin paneli, gelir sistemi sekmesi - hepsi hatasız
+
+Stage Summary:
+- Proje bu ortamda tam çalışır durumda; tarayıcı doğrulaması başarılı
+- Yerel veritabanı güncel tohum verisiyle hazır; admin: hakan_varlik24@hotmail.com / Hakan_1251
+- Ortama özgü değişiklikler (sqlite schema, package.json, next.config) commit edilecek
