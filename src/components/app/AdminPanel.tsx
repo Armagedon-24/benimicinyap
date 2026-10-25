@@ -22,6 +22,10 @@ import {
   CreditCard,
   Settings,
   AlertTriangle,
+  Mail,
+  MailOpen,
+  MessageSquare,
+  CheckCheck,
 } from 'lucide-react';
 import { TurkishLiraIcon } from '@/components/ui/TurkishLiraIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,7 +66,7 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/useAppStore';
-import type { User, Task } from '@/lib/types';
+import type { User, Task, ContactMessage } from '@/lib/types';
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'Bekliyor', variant: 'secondary' },
@@ -77,6 +81,8 @@ export default function AdminPanel() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [seedLoading, setSeedLoading] = useState(false);
@@ -115,19 +121,21 @@ export default function AdminPanel() {
     setLoading(true);
     storeAddLog('Admin verileri yenileniyor...');
     try {
-      const [usersRes, tasksRes, statsRes, settingsRes, revenueRes] = await Promise.all([
+      const [usersRes, tasksRes, statsRes, settingsRes, revenueRes, messagesRes] = await Promise.all([
         fetch('/api/admin?action=users'),
         fetch('/api/tasks'),
         fetch('/api/admin?action=stats'),
         fetch('/api/admin/settings'),
         fetch('/api/admin/revenue'),
+        fetch('/api/admin/messages'),
       ]);
-      const [usersData, tasksData, statsData, settingsData, revenueData] = await Promise.all([
+      const [usersData, tasksData, statsData, settingsData, revenueData, messagesData] = await Promise.all([
         usersRes.json(),
         tasksRes.json(),
         statsRes.json(),
         settingsRes.json(),
         revenueRes.json(),
+        messagesRes.json(),
       ]);
       if (usersData.success) setUsers(usersData.users);
       if (tasksData.success) {
@@ -140,6 +148,10 @@ export default function AdminPanel() {
         applySettingsToLocal(settingsData.settings);
       }
       if (revenueData.success) setRevenue(revenueData.revenue);
+      if (messagesData.success) {
+        setContactMessages(messagesData.messages || []);
+        setUnreadMessages(messagesData.unreadCount || 0);
+      }
       storeAddLog('Admin verileri başarıyla yüklendi');
     } catch {
       storeAddLog('Admin veri yükleme hatası');
@@ -194,6 +206,64 @@ export default function AdminPanel() {
       setSeedLoading(false);
     }
   };
+  const handleMarkMessage = async (id: string, read: boolean) => {
+    try {
+      const res = await fetch('/api/admin/messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, read }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContactMessages((prev) => prev.map((m) => (m.id === id ? { ...m, read } : m)));
+        setUnreadMessages((prev) => Math.max(0, prev + (read ? -1 : 1)));
+      } else {
+        toast.error(data.message || 'İşlem başarısız');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    }
+  };
+
+  const handleMarkAllMessagesRead = async () => {
+    try {
+      const res = await fetch('/api/admin/messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContactMessages((prev) => prev.map((m) => ({ ...m, read: true })));
+        setUnreadMessages(0);
+        toast.success('Tüm mesajlar okundu olarak işaretlendi');
+      } else {
+        toast.error(data.message || 'İşlem başarısız');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/messages?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setContactMessages((prev) => {
+          const target = prev.find((m) => m.id === id);
+          if (target && !target.read) setUnreadMessages((u) => Math.max(0, u - 1));
+          return prev.filter((m) => m.id !== id);
+        });
+        toast.success('Mesaj silindi');
+      } else {
+        toast.error(data.message || 'Silinemedi');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    }
+  };
+
   const handleResolveDispute = async (taskId: string, action: 'completed' | 'cancelled') => {
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
@@ -404,6 +474,17 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="revenue" className="text-xs whitespace-nowrap flex-shrink-0 px-2.5 py-1.5 sm:px-3 sm:py-2">
             Gelir Sistemi
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="text-xs whitespace-nowrap flex-shrink-0 px-2.5 py-1.5 sm:px-3 sm:py-2">
+            <span className="inline-flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" />
+              İletişim Kutusu
+              {unreadMessages > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {unreadMessages > 9 ? '9+' : unreadMessages}
+                </span>
+              )}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="console" className="text-xs whitespace-nowrap flex-shrink-0 px-2.5 py-1.5 sm:px-3 sm:py-2">
             Sistem Konsolu
@@ -1147,6 +1228,107 @@ export default function AdminPanel() {
                           İptal Et & İşverene İade Et
                         </Button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* İletişim Kutusu Tab — Hakkında sayfasından gelen mesajlar (sadece admin) */}
+        <TabsContent value="messages" className="mt-5 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Gelen Mesajlar
+                  {unreadMessages > 0 && (
+                    <Badge variant="destructive" className="text-[10px]">
+                      {unreadMessages} okunmamış
+                    </Badge>
+                  )}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="text-xs gap-1.5" onClick={fetchAll}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Yenile
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs gap-1.5"
+                    onClick={handleMarkAllMessagesRead}
+                    disabled={unreadMessages === 0}
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    Tümünü Okundu İşaretle
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {contactMessages.length === 0 ? (
+                <div className="py-10 text-center">
+                  <MessageSquare className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2" />
+                  <p className="text-xs text-muted-foreground">Henüz mesaj yok. Hakkında sayfasından gönderilen mesajlar burada görünür.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {contactMessages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`rounded-lg border p-3.5 transition-all ${
+                        m.read
+                          ? 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/30'
+                          : 'border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/25 border-l-4 border-l-blue-500'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold">{m.name}</span>
+                            {!m.read && (
+                              <Badge className="bg-blue-600 hover:bg-blue-600 text-white text-[9px] px-1.5 py-0">YENİ</Badge>
+                            )}
+                          </div>
+                          <a href={`mailto:${m.email}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                            {m.email}
+                          </a>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {new Date(m.createdAt).toLocaleString('tr-TR')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs gap-1 h-7"
+                            onClick={() => handleMarkMessage(m.id, !m.read)}
+                          >
+                            {m.read ? <Mail className="w-3 h-3" /> : <MailOpen className="w-3 h-3" />}
+                            {m.read ? 'Okunmadı Yap' : 'Okundu'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs gap-1 h-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            onClick={() => handleDeleteMessage(m.id)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Sil
+                          </Button>
+                        </div>
+                      </div>
+                      {m.subject && (
+                        <p className="text-xs font-semibold mt-2.5 text-slate-700 dark:text-slate-200">
+                          Konu: {m.subject}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-1 whitespace-pre-wrap break-words">
+                        {m.message}
+                      </p>
                     </div>
                   ))}
                 </div>

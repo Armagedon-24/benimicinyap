@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Search,
   ShieldCheck,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ const navItems = [
   { id: 'my-tasks', label: 'Görevlerim', icon: ClipboardList },
   { id: 'wallet', label: 'Cüzdan & Ödeme', icon: Wallet },
   { id: 'dashboard', label: 'Raporlama Paneli', icon: LayoutDashboard },
+  { id: 'about', label: 'Hakkında', icon: Info },
 ];
 
 export default function AppHeader() {

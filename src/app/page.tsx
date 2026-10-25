@@ -20,6 +20,7 @@ const MyTasks = dynamic(() => import('@/components/app/MyTasks'), { ssr: false }
 const Wallet = dynamic(() => import('@/components/app/Wallet'), { ssr: false });
 const Reporting = dynamic(() => import('@/components/app/Reporting'), { ssr: false });
 const AdminPanel = dynamic(() => import('@/components/app/AdminPanel'), { ssr: false });
+const AboutPage = dynamic(() => import('@/components/app/AboutPage'), { ssr: false });
 const TaskDetailModal = dynamic(() => import('@/components/app/TaskDetailModal'), { ssr: false });
 const ProfilePanel = dynamic(() => import('@/components/app/ProfilePanel'), { ssr: false });
 const RatingModal = dynamic(() => import('@/components/app/RatingModal'), { ssr: false });
@@ -203,6 +204,7 @@ export default function Home() {
       case 'my-tasks': return <MyTasks />;
       case 'wallet': return <Wallet />;
       case 'dashboard': return <Reporting />;
+      case 'about': return <AboutPage />;
       case 'admin':
         return currentUser?.role === 'admin' ? <AdminPanel /> : <DiscoverTasks />;
       case 'profile': return <ProfilePanel />;
@@ -217,9 +219,15 @@ export default function Home() {
       <MobilePushBanner />
 
       {!isAuthenticated ? (
-        <main id="main-content" className="flex-1 relative z-10">
-          <LoginPage onLoginSuccess={handleLoginSuccess} />
-        </main>
+        activeTab === 'about' ? (
+          <main id="main-content" className="flex-1 relative z-10 px-3 sm:px-4 lg:px-8 py-3 sm:py-6">
+            <AboutPage isGuest onBackToLogin={() => setActiveTab('tasks')} />
+          </main>
+        ) : (
+          <main id="main-content" className="flex-1 relative z-10">
+            <LoginPage onLoginSuccess={handleLoginSuccess} onAbout={() => setActiveTab('about')} />
+          </main>
+        )
       ) : (
         <>
           <AppHeader />

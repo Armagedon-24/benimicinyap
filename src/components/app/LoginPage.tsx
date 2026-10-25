@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Mail, Lock, User, MapPin, FileText, UserPlus, Loader2 } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User, MapPin, FileText, UserPlus, Loader2, Info } from 'lucide-react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,9 +17,10 @@ import { useAppStore } from '@/store/useAppStore';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
+  onAbout?: () => void;
 }
 
-export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
+export default function LoginPage({ onLoginSuccess, onAbout }: LoginPageProps) {
   const login = useAppStore((s) => s.login);
   const addLog = useAppStore((s) => s.addLog);
 
@@ -296,6 +297,18 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <Lock className="w-3 h-3" />
               <span>End-To-End Encrypted Secure Login Tunnel</span>
             </div>
+            {onAbout && (
+              <div className="flex items-center justify-center mt-2">
+                <button
+                  type="button"
+                  onClick={onAbout}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline underline-offset-2 transition-colors"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  Uygulama Hakkında
+                </button>
+              </div>
+            )}
           </CardHeader>
         </Card>
       </motion.div>

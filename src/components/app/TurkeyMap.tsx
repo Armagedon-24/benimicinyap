@@ -435,7 +435,7 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
       <div className="flex flex-col md:flex-row gap-3">
       {/* Left Sidebar - Active Task List (desktop only) */}
       <div className={`${sidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden' : 'md:w-80 shrink-0'} hidden md:flex transition-all duration-300`}>
-        <div className="glass-card rounded-xl shadow-sm h-[420px] flex flex-col overflow-hidden w-full transition-all duration-300 hover:shadow-xl hover:shadow-blue-200/50 hover:-translate-y-0.5 hover:ring-1 hover:ring-blue-300/60 dark:hover:shadow-blue-900/40 dark:hover:ring-blue-800/60">
+        <div className="glass-card glass-card-lift rounded-xl h-[420px] flex flex-col overflow-hidden w-full">
           {/* Sidebar Header */}
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-white/5">
             <div className="flex items-center justify-between">

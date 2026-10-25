@@ -174,3 +174,13 @@ model Review {
   fromRole     String   @default("requester") // requester, tasker
   createdAt    DateTime @default(now())
 }
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String   @default("")
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

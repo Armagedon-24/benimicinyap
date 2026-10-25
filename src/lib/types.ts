@@ -134,6 +134,16 @@ export interface PaymentCard {
   user?: User;
 }
 
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface SystemLog {
   id: string;
   level: string;

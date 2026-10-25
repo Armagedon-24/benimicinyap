@@ -179,3 +179,29 @@
 .neon-glow-blue {
   filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
 }
+/* ============================================================
+   glass-card hover yükselmesi + kenar parlaması
+   Not: .glass-card globals.css'te katman (layer) DIŞI tanımlıdır;
+   CSS cascade'de katmansız kurallar Tailwind'in katmanlı
+   utility'lerini (hover:shadow-xl, hover:ring-1...) her zaman yener.
+   Bu yüzden hover gölgesi/ring'i burada, .glass-card'tan yüksek
+   özellik (specificity) ile kesin uygulanacak şekilde tanımlıyoruz.
+   ============================================================ */
+.glass-card-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+@media (hover: hover) {
+  .glass-card.glass-card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 4px 20px 0 rgba(0, 0, 0, 0.05),
+      0 16px 36px -12px rgba(59, 130, 246, 0.30),
+      0 0 0 1.5px rgba(59, 130, 246, 0.35);
+  }
+  .dark .glass-card.glass-card-lift:hover {
+    box-shadow:
+      0 8px 32px 0 rgba(0, 0, 0, 0.35),
+      0 16px 36px -12px rgba(96, 165, 250, 0.35),
+      0 0 0 1.5px rgba(96, 165, 250, 0.45);
+  }
+}
