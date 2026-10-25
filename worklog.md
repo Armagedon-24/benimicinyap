@@ -168,3 +168,25 @@ Stage Summary:
 - Depo artık Vercel importuna hazır: https://github.com/Armagedon-24/benimicinyap
 - Kalan adım: kullanıcı vercel.com/new üzerinden import edecek
 - Kullanıcıya iş bitince PAT revoke etmesi önerildi
+
+---
+Task ID: 5
+Agent: main-agent
+Task: Vercel canlı sitede admin login 500 hatası teşhis ve düzeltme
+
+Work Log:
+- Canlı test: GET /api/tasks 200 (DB okuma OK), POST /api/auth 500 (tüm kullanıcılar)
+- Kök neden: security.ts sessionSecret() production'da AUTH_SECRET yoksa throw ediyordu
+  (Vercel'de NODE_ENV=production, env tanımlı değil → setSession/sign çöküyor)
+- Düzeltme: sessionSecret() production'da yedek anahtar fallback'i + console.warn
+- DEPLOY.md güncellendi (AUTH_SECRET opsiyon notu)
+- Commit c2dce2f push edildi (PAT hâlâ geçerli)
+- 150s + 90s bekleyip canlı tekrar test: hâlâ 500 → otomatik deploy tetiklenmemiş
+  (public URL import'ta Git bağlantısı kurulmamış)
+
+Stage Summary:
+- Kod düzeltmesi GitHub'da hazır (c2dce2f)
+- Kullanıcıya 2 yol: (A) AUTH_SECRET env ekle + Redeploy — eski kodla bile çalışır,
+  (B) Settings→Git→Connect ile repo bağla + Redeploy — yeni kodu çeker, ileride
+  otomatik deploy açılır
+- Üretilen AUTH_SECRET örneği kullanıcıya verildi
