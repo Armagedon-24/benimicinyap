@@ -122,3 +122,31 @@ Stage Summary:
 - AI insan güveni skoru artık otomatik onay engelleyici: %30 altı (admin ayarlanabilir) teslimlerde işveren onaylayamıyor — hem UI hem API'de zorunlu, güvenlik logu tutuluyor, admin hakem override'ı çalışıyor
 - Kanıt fotoğrafı artık gerçek dosya olarak yükleniyor: tip/boyut/imza doğrulamalı, EXIF korunarak saklanıyor ve AI taraması orijinal dosya üzerinden yüksek güven (%85) üretiyor
 - Onay yalnızca delivered/disputed durumundan yapılabiliyor; tüm finansal kayıtlar (escrow, komisyon, iade) DB ile tutarlı; lint ve dev.log temiz
+
+---
+Task ID: 3
+Agent: Z.ai Main Agent (Vercel deploy hazırlığı)
+Task: Projeyi GitHub deposuna (Armagedon-24/benimicinyap) push edilecek ve Vercel'de yayınlanacak hale getirmek (serverless uyumluluk + temiz demo verisi)
+
+Work Log:
+- Vercel uyumluluk analizi: SQLite (db/custom.db) read-only FS'te yazılamaz, upload rotası public/ altına yazıyor, AI check localhost self-fetch yapıyor — üç kritik sorun tespit edildi
+- src/lib/db.ts: bootstrapDatabaseUrl() eklendi — VERCEL=1'de db/custom.db → /tmp/benimicinyap.db kopyalanır, DATABASE_URL PrismaClient'dan ÖNCE yeniden ayarlanır
+- next.config.ts: outputFileTracingIncludes (./db/custom.db) — build trace doğrulandı: custom.db + prisma query engine lambda paketinde
+- api/upload/proof: Vercel'de /tmp/uploads/proofs + /api/files/proofs/<dosya> URL döner; lokal davranış (public/uploads/proofs) korunur
+- api/files/proofs/[file]/route.ts (yeni): /tmp ve public fallback'li kanıt sunumu; regex tabanlı path-traversal koruması; immutable cache + nosniff header
+- ai-proof-check.ts: readLocalProofFile() — /api/files/proofs ve /uploads/proofs URL'leri diskten doğrudan okunur (localhost self-fetch kaldırıldı, Vercel'de VERCEL_URL fallback eklendi); ZAI_CONFIG env ile SDK istemcisi kurulabilir (Vercel'de .z-ai-config yok)
+- vercel.json: build.env DATABASE_URL=file:/tmp/benimicinyap.db (prisma generate güvencesi)
+- Temizlik: package-lock.json (çift lockfile) kaldırıldı — bun.lock kaynak; 7 test kanıt görseli + download/proof-upload-preview.png repodan çıkarıldı; public/uploads/proofs/.gitkeep eklendi
+- db/custom.db scripts/reset-db.ts ile temiz demo verisine resetlendi (6 kullanıcı, 6 görev, 5 teklif, 6 işlem, 16 ayar)
+- Production build test: bun run build ✓ (23 statik sayfa + tüm API rotaları, critters optimizeCss dahil sorunsuz)
+- Runtime doğrulama (ön plan sunucu): homepage 200 ✓, elif login 200 (bakiye 6200₺ temiz tohum) ✓, tasks 200 ✓, yeni dosya rotası 400/404 (traversal koruması) ✓, upload auth 401 ✓, gerçek dosya yükleme + sunum 200 image/jpeg ✓
+- DEPLOY.md eklendi (Türkçe Vercel kılavuzu: push → import → deploy, ZAI_CONFIG opsiyonu, demo hesaplar)
+- Sandbox kısıtı: tool çağrısı bitince spawn edilen süreçler öldürülüyor (heartbeat testiyle doğrulandı); dev server yalnızca /start.sh boot zincirinden kalıcı — sonraki container başlangıcında dev.sh otomatik yeniden başlatacak
+- Commit: 390c50c (vercel hazırlığı) + 0333be8 (DEPLOY.md) — toplam 7 commit push bekliyor
+- Push/deploy engeli: sandbox'ta GitHub PAT ve Vercel token yok — git push "could not read Username" ile durdu; kullanıcıya hazır push komutu + vercel.com/new import adımları verildi
+
+Stage Summary:
+- Proje tamamen Vercel-uyumlu: ek env girişi gerektirmeden vercel.com/new → Import → Deploy ile yayına çıkabilir
+- 7 commit yerelde hazır (temiz demo verisi dahil); push için kullanıcı PAT'i verebilir veya kendi makinesinde git push origin main çalıştırabilir
+- Serverless sınırı belgelendi: SQLite /tmp demo-grade (soğuk başlangıçta seed'e döner); kalıcı veri için Turso/Neon taşıma planı DEPLOY.md'de
+- AI analizi Vercel'de heuristic moda düşer (EXIF/C2PA çalışır); tam LLM analizi için ZAI_CONFIG env opsiyonu hazır
