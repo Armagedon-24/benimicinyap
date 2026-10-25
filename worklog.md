@@ -249,3 +249,33 @@ Stage Summary:
 - Takım kapsamlı token ile API deploy çalışıyor; CLI/link gerekmiyor
 - Gelecek düzeltmeler için: kod değişikliği + commit + bu scripti çalıştırmak yeterli
 - GitHub tarafı (Armagedon-24 repo) yedek/ana kopya; deploy kaynağı artık API
+
+---
+Task ID: 9
+Agent: main-agent
+Task: Haritada il isimlerini kaldırma + hover bilgi balonu ekleme (canlı deploy dahil)
+
+Work Log:
+- Kullanıcı isteği: haritada şehir isimleri olmasın; fare bir ilin üzerindeyken
+  il adı bilgi balonu görünsün, fare çekilince kaybolsun
+- Kök neden: Esri Canvas "World_*_Gray_Reference" tile katmanı il isimlerini basıyordu
+- TurkeyMap.tsx: refLayer (Reference tile katmanı) + refLayerRef + tema setUrl bloğu kaldırıldı
+- 81 il GeoJSON poligonuna bindTooltip eklendi (sticky:true, direction:'top',
+  className:'city-name-tooltip') — hover'da açılır, mouseout'ta Leaflet otomatik kapatır
+- CSS: .city-name-tooltip beyaz/koyu tema stilleri eklendi
+- Production build temiz; scripts/test-map-hover.sh ile yerel E2E test:
+  Reference tile isteği YOK, hover → "BALON_ACIK: Konya", fare çekince
+  "BALON_KAPANDI_OK"; yakınlaştırılmış görünümde de tile'larda isim yok
+- GitHub push: ba5f53c..7d37625 (PAT #1 hâlâ geçerli)
+- Vercel deploy: node scripts/vercel-api-deploy.mjs <token> → deployment
+  dpl_Hv4U6XkBhRdvxR5nipCK2EVGfXmr READY; scriptteki uid/id okuma hatası
+  (deploy.uid || deploy.id) düzeltildi + scripts/vercel-poll.sh eklendi (0e5ae7a)
+- Canlı doğrulama (benimicinyap-two.vercel.app): login 200, 6 görev,
+  Reference isteği yok, hover → "CANLI_BALON_ACIK: Konya", çekince kapandı
+  (download/live-map-hover.png)
+
+Stage Summary:
+- Haritada artık kalıcı il/şehir ismi yok; isim yalnızca hover bilgi balonu olarak
+  imleci takip ederek görünüyor ve fare çekilince kayboluyor
+- Canlı site yeni kodda; GitHub ve Vercel senkron
+- Not: deploy API yanıtı artık id döndürüyor — script düzeltildi, tek komutla çalışır
