@@ -308,3 +308,47 @@ Stage Summary:
 - Tailwind v4 medya kapısı sayesinde dokunmatik cihazlarda yanlışlıkla
   yapışkan hover olmuyor (mobilde zaten sidebar gizli)
 - Deploy pipeline tam otomatik: kod değişikliği → commit → vercel-api-deploy.mjs
+
+---
+Task ID: 11
+Agent: main-agent
+Task: Hakkında sayfası + iletişim mesaj panosu + admin görünürlüğü + hover kenar rengi düzeltmesi
+
+Work Log:
+- AboutPage.tsx: hero (amaç metni), Nasıl Çalışır (4 adım escrow akışı),
+  Neden Benim İçin Yap (6 özellik), Bize Ulaşın mesaj panosu; framer-motion
+  animasyonlu, ziyaretçi modu (isGuest + Giriş Ekranına Dön)
+- page.tsx: 'about' sekmesi; ziyaretçi activeTab=about ise LoginPage yerine
+  AboutPage; LoginPage'e "Uygulama Hakkında" bağlantısı (onAbout prop)
+- AppHeader: Hakkında sekmesi navItems'a eklendi (tüm kullanıcılar)
+- Prisma: ContactMessage modeli (name/email/subject/message/read) + db push
+- POST /api/contact: public, doğrulama (ad/email/konu/mesaj uzunlukları),
+  allowRateLimit 5/dk, securityEvent kaydı
+- /api/admin/messages GET/PATCH/DELETE: requireAdmin — 401 oturumsuz, 403
+  normal kullanıcı (elif ile canlı test edildi), 200 admin
+- AdminPanel: "İletişim Kutusu" sekmesi + kırmızı okunmamış rozeti + YENİ
+  etiketi + Okundu/Okunmadı/Sil/Tümünü Okundu işaretle/Yenile
+- HOVER FIX (kullanıcının "yükseldi ama kenarlardan renk sızmıyor" bulgusu):
+  .glass-card globals.css'te katmansız tanımlı → CSS cascade'de katmansız
+  kurallar Tailwind'in katmanlı hover:shadow-xl/ring utility'lerini HER ZAMAN
+  yener → efektin yükselmesi görünüyordu (transform utilities etkilenmiyor)
+  ama gölge/ring uygulanmıyordu. Çözüm: globals.css'e .glass-card-lift
+  (katmansız, .glass-card.glass-card-lift:hover specificity 0-3-0):
+  translateY(-2px) + mavi glow shadow + 1.5px ring; koyu tema varyantı;
+  @media (hover:hover) ile dokunmatikte kapalı. TurkeyMap sidebar kartı +
+  AboutPage kartları bu sınıfa geçirildi. Canlı CSS doğrulandı.
+- E2E test notları: Radix TabsTrigger synthetic .click() ile değişmiyor —
+  gerçek mouse move/down/up gerekiyor; Chrome nested-CSS nedeniyle
+  styleSheets taraması cssRules'i her CSSStyleRule'da döndürüyor (kontrol
+  hatası); build dosyasından doğrulama yapıldı. Sunucu sandbox'ta tool
+  çağrıları arası öldüğü için her test tek çağrıda sunucu+test desenli.
+- DB: test mesajları silindi, 2 demo mesaj bırakıldı
+  (scripts/seed-contact-demo.ts); deploy db/custom.db ile taşındı
+- Commit 7e22bcd push; deploy dpl (f4l9g33es) READY → benimicinyap-two
+- Canlı doğrulama: contact POST success, messages 401/403/admin OK
+  (unread=3), glass-card-lift hover kuralı canlı CSS'te VAR
+
+Stage Summary:
+- Hakkında sayfası ziyaretçi + kullanıcı erişiminde açık; amacı net anlatıyor
+- Mesaj panosu → admin İletişim Kutusu'na düşüyor; sadece admin görebiliyor
+- Hover efektinde yükselme + kenarlardan mavi renk sızmı artık kesin uygulanıyor
