@@ -187,9 +187,10 @@ export default function Home() {
   }, [isAuthenticated, currentUser, notifications, setNotifications]);
 
   const handleLoginSuccess = () => {
-    const savedUser = localStorage.getItem('current_user');
-    if (savedUser) {
-      const user = JSON.parse(savedUser);
+    // FIX: use the freshly logged-in user from the store, not the stale
+    // localStorage cache. login() already synced localStorage via the store.
+    const user = useAppStore.getState().currentUser;
+    if (user) {
       fetchUserData(user);
       addLog(`Giriş yapıldı: ${user.fullName}`);
     }

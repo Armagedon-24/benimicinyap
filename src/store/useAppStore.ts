@@ -73,7 +73,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Auth
   isAuthenticated: false,
   currentUser: null,
-  login: (user) =>
+  login: (user) => {
+    // FIX: keep localStorage cache in sync with the authenticated user so
+    // stale data from a previous account never leaks into the new session.
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('current_user', JSON.stringify(user));
+    }
     set({
       isAuthenticated: true,
       currentUser: user,
@@ -81,8 +86,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       escrowBalance: user.escrowBalance,
       isDarkMode: user.darkMode,
       isOnline: user.isOnline,
-    }),
-  logout: () =>
+    });
+  },
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('current_user');
+    }
     set({
       isAuthenticated: false,
       currentUser: null,
@@ -96,7 +105,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       profileOpen: false,
       kycModalOpen: false,
       ratingModal: null,
-    }),
+    });
+  },
 
   // UI
   activeTab: 'tasks',
