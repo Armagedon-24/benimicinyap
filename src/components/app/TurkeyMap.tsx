@@ -435,7 +435,7 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
       <div className="flex flex-col md:flex-row gap-3">
       {/* Left Sidebar - Active Task List (desktop only) */}
       <div className={`${sidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden' : 'md:w-80 shrink-0'} hidden md:flex transition-all duration-300`}>
-        <div className="glass-card rounded-xl shadow-sm h-[420px] flex flex-col overflow-hidden w-full">
+        <div className="glass-card rounded-xl shadow-sm h-[420px] flex flex-col overflow-hidden w-full transition-all duration-300 hover:shadow-xl hover:shadow-blue-200/50 hover:-translate-y-0.5 hover:ring-1 hover:ring-blue-300/60 dark:hover:shadow-blue-900/40 dark:hover:ring-blue-800/60">
           {/* Sidebar Header */}
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-white/5">
             <div className="flex items-center justify-between">
@@ -471,7 +471,7 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
                 {cityTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="px-3 py-2.5 border-b border-slate-50 dark:border-slate-800/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 cursor-pointer transition-colors group"
+                    className="px-3 py-2.5 border-b border-slate-50 border-l-2 border-l-transparent dark:border-slate-800/50 dark:border-l-transparent hover:bg-blue-50/70 dark:hover:bg-blue-950/30 hover:border-l-blue-500 dark:hover:border-l-blue-400 hover:shadow-sm cursor-pointer transition-all duration-200 group"
                     onClick={() => onTaskClick?.(task)}
                   >
                     {/* Category + Status */}
