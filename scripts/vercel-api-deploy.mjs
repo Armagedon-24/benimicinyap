@@ -76,7 +76,8 @@ const deploy = await api('/v13/deployments', {
     projectSettings: { framework: 'nextjs' },
   }),
 });
-console.log(`      deployment uid: ${deploy.uid} | url: ${deploy.url}`);
+console.log(`      deployment uid: ${deploy.uid || deploy.id} | url: ${deploy.url}`);
+const deployUid = deploy.uid || deploy.id;
 
 // 4) Durumu yokla
 console.log('[4/4] Build tamamlanıyor (2-6 dk)...');
@@ -84,14 +85,14 @@ const deadline = Date.now() + 8 * 60 * 1000;
 let state = 'QUEUED', ready;
 while (Date.now() < deadline) {
   await new Promise((r) => setTimeout(r, 15000));
-  const d = await api(`/v13/deployments/${deploy.uid}`);
+  const d = await api(`/v13/deployments/${deployUid}`);
   state = d.readyState || d.state;
   console.log(`      durum: ${state} (${new Date().toLocaleTimeString('tr-TR')})`);
   if (state === 'READY') { ready = d; break; }
   if (state === 'ERROR' || state === 'CANCELED') {
     // build loglarını çek
     try {
-      const ev = await api(`/v2/deployments/${deploy.uid}/events?limit=100`);
+      const ev = await api(`/v2/deployments/${deployUid}/events?limit=100`);
       const logs = (ev || []).filter((e) => e.type === 'stdout' || e.type === 'stderr')
         .map((e) => e.text || e.payload?.text).filter(Boolean).slice(-40);
       console.error('--- BUILD LOGLARI (son satırlar) ---');
