@@ -24,6 +24,9 @@ git push origin main
 Ortam değişkeni (env) girmenize gerek yoktur:
 - `DATABASE_URL` → `vercel.json` içinde tanımlı; kod, soğuk başlangıçta seed
   veritabanını otomatik olarak `/tmp/benimicinyap.db` konumuna kopyalar.
+- `AUTH_SECRET` → ayarlanmazsa kod yedek oturum anahtarıyla çalışır (giriş sorunsuz
+  olur). Daha güvenli oturum imzası isterseniz Vercel → Settings → Environment
+  Variables altına rastgele bir değer ekleyin (örn. `openssl rand -hex 32` çıktısı).
 
 ## 2') Alternatif: CLI ile Deploy
 

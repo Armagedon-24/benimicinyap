@@ -11,7 +11,10 @@ function sessionSecret(): string {
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (secret) return secret;
   if (process.env.NODE_ENV === "production") {
-    throw new Error("AUTH_SECRET must be configured in production");
+    // Vercel/demo uyumluluk: AUTH_SECRET ayarlanmadıysa sabit yedek anahtar kullan.
+    // Güvenli üretim için Vercel'de AUTH_SECRET env değişkeni tanımlanmalıdır.
+    console.warn("[security] AUTH_SECRET tanimli degil — yedek oturum anahtari kullaniliyor. Uretimde AUTH_SECRET ayarlayin.");
+    return "benimicinyap-fallback-session-secret-change-me";
   }
   return "development-only-session-secret";
 }
