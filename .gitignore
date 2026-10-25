@@ -70,3 +70,7 @@ tool-results/
 /android-twa/
 /android/
 *.keystore
+
+# play paketi (imza anahtari ASLA repoya) — sadece README izli kalir
+/download/*
+!/download/README.md

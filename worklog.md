@@ -480,3 +480,58 @@ Stage Summary:
 - Task 13 tamamen dogrulandi: temizlik + guvenlik + hiz + deploy + canli test
 - Not: secret rotasyonu gerektiginde Vercel env'de guncellenmeli (tum oturumlar
   duser); preview/development target'lari gerekirse eklenebilir
+
+---
+Task ID: 14
+Agent: main-agent
+Task: Google Play yayina hazirlik - TWA paketleme, imzali AAB, magaza varliklari, gizlilik politikasi
+
+Work Log:
+- WEB HAZIRLIK (commit c95ba20, deploy READY, canli dogrulandi):
+  - /gizlilik sayfasi eklendi (Play zorunlulugu; KVKK uyumlu 11 bolumlu TR politika)
+  - public/sw.js: minimal network-first service worker (API'ler asla kesilmez,
+    statik varliklar sessiz yedeklenir) + layout.tsx'te afterInteractive kayit
+  - public/.well-known/assetlinks.json: com.benimicinyap.app + SHA-256 parmak izi
+  - Canli: assetlinks 200, /gizlilik 200, sw.js 200, manifest 200
+- IMZA ANAHTARI:
+  - android-twa/benimicinyap-upload.keystore uretildi (RSA 2048, 30 yil,
+    alias: benimicinyap, sifre: download/keystore-bilgileri.txt icinde)
+  - SHA-256: 71:BB:E0:D4:6B:CB:8E:48:A9:E4:E9:F1:AF:13:FB:20:72:84:6F:8C:
+    43:56:CA:39:9C:50:2B:73:62:2E:AE:28 (canli assetlinks ile birebir ayni)
+- TWA BUILD (bubblewrap 1.27):
+  - Android SDK elle kuruldu (~/.bubblewrap/androidsdk: cmdline-tools 11076708,
+    platform-tools, build-tools 29.0.2+34.0.0, platforms;android-34) + JDK 17
+    Temurin (~/.bubblewrap/jdk, sistem Java 21 JRE oldugu icin javac yoktu)
+  - Asilan gecitler: SDK validatePath $SDK/tools|bin istiyor (symlink ile cozuldu);
+    androidbrowserhelper 2.7.4 minSdk 24 istiyor (minSdk 21->24, Android 7.0+);
+    inquirer TTY hatasi -> build dogrudan gradlew ile imza injected properties
+    ile kosuldu
+  - Nihai build komutu: cd android-twa && ./gradlew :app:bundleRelease
+    :app:assembleRelease -Pandroid.injected.signing.store.file=<keystore yolu>
+    -Pandroid.injected.signing.store.password=<sifre>
+    -Pandroid.injected.signing.key.alias=benimicinyap
+    -Pandroid.injected.signing.key.password=<sifre> --no-daemon
+  - CIKTI: app-release-bundle.aab 2.9MB + app-release.apk 2.8MB,
+    apksigner verify: sertifika SHA-256 assetlinks ile ESI ✓
+  - Manifest: packageId com.benimicinyap.app, versionCode 1, versionName 1.0.0,
+    minSdk 24, targetSdk 36, portrait, notifications+locationDelegation acik
+- MAGAZA VARLIKLARI (download/play-store-paketi/):
+  - 6 telefon ekrani goruntusu 1080x1920 (agent-browser; giris, hakkinda,
+    SSS acik, kesfet+harita, gorev yayinla, cuzdan; harita tile'lari canli yuklu)
+  - tanitim-gorseli-1024x500.png (PIL: marka lacivert gradyan, ikon, 3 rozet;
+    ilk denemede beyaz-beyaz rozet hatasi -> RGB alpha yok sayma hatasi, duzeltildi)
+  - magaza-ikonu-512.png, magaza-metinleri.md (baslik/kisa/tam aciklama),
+    yukleme-rehberi.md (Console adimlari + Data Safety + IARC cevaplari),
+    keystore-bilgileri.txt (GIZLI), imza-anahtari/keystore
+  - play-store-paketi.zip (7.1MB) olusturuldu
+- GUVENLIK:
+  - .gitignore kapatildi: /download/* (yalnizca README.md istisna) - keystore
+    depoya girme riski kapandi; android-twa/ zaten yoksayiliyor
+  - Repo temizligi teyit edildi: git status yalnizca .gitignore + feature-graphic.py
+
+Stage Summary:
+- Imzali AAB Play'e yuklemeye hazir; gizlilik politikasi ve assetlinks canli
+- Son user adimi: Play Console'a giris + rehberdeki adimlar (hesap yalnizca
+  kullaniciyla acilir; 25 USD kayit ucreti)
+- KRITIK not: ilk yuklemeden sonra Play App Signing SHA-256'si assetlinks'e
+  IKINCI satir olarak eklenmeli (rehber bolum 6), yoksa TWA tam ekran olmaz
