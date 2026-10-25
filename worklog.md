@@ -279,3 +279,32 @@ Stage Summary:
   imleci takip ederek görünüyor ve fare çekilince kayboluyor
 - Canlı site yeni kodda; GitHub ve Vercel senkron
 - Not: deploy API yanıtı artık id döndürüyor — script düzeltildi, tek komutla çalışır
+
+---
+Task ID: 10
+Agent: main-agent
+Task: Harita solundaki "Aktif Görevler" kartına hover efekti ekleme
+
+Work Log:
+- TurkeyMap.tsx sidebar kartı: hover'da -translate-y-0.5 yükselme + shadow-xl +
+  mavi ring (hover:ring-blue-300/60, koyu tema: blue-900/40) + 300ms geçiş
+- Görev satırları: border-l-2 (transparan→hover'da blue-500/400) + hover:bg-blue-50/70
+  + hover:shadow-sm + transition-all 200ms (başlık rengi group-hover zaten vardı)
+- Kritik bulgu: Tailwind v4 hover varyantı @media (hover:hover) ile sarmalanır;
+  headless Chrome'da (hover:none) uygulanmaz → E2E'de :hover eşleşse bile stiller
+  inaktif. Doğrulama: (1) tüm yeni utility'ler production CSS'te mevcut,
+  (2) matches(':hover') çalışıyor, (3) simülasyon class'ı ile görsel kanıt
+  (download/sidebar-hover-simulasyon.png)
+- Aksaklık: bun run build sonrası eski dev sunucu kilitlendi; süreç sandbox
+  kısıtı nedeniyle tool çağrıları arasında ölüyor → testler tek çağrıda
+  sunucu-başlat+test deseniyle yapıldı (scripts/test-sidebar-hover.sh,
+  scripts/test-hover-sim.sh). next start standalone uyarısı: çalışıyor.
+- Commit 368230b push edildi; deploy dpl_HNh3j6VN8AhrckKnMpitGZsnDRZr READY
+  (script uid düzeltmesiyle ilk kez tek komutta baştan sona çalıştı)
+- Canlı CSS doğrulaması: 7/7 hover kuralı benimicinyap-two.vercel.app build'inde
+
+Stage Summary:
+- Sidebar kartı ve görev satırları artık belirgin hover efektiyle etkileşimli
+- Tailwind v4 medya kapısı sayesinde dokunmatik cihazlarda yanlışlıkla
+  yapışkan hover olmuyor (mobilde zaten sidebar gizli)
+- Deploy pipeline tam otomatik: kod değişikliği → commit → vercel-api-deploy.mjs
