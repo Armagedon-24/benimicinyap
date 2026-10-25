@@ -455,3 +455,28 @@ Stage Summary:
 - Build artık TypeScript hatasıyla yayına çıkamaz; CSP + cache header'ları canlıda
 - AUTH_SECRET hâlâ Vercel env'inde tanımlı değil: fallback anahtar kullanılıyor
   (logda uyarı var) — üretim güvenliği için Vercel'e AUTH_SECRET eklenmesi önerilir
+
+---
+Task ID: 13b
+Agent: main-agent
+Task: Task 13 sonrasi dogrulama - AUTH_SECRET durumu teyidi + oturum taklit saldiri testi
+
+Work Log:
+- Push durumu teyit edildi: HEAD (9b9333b) == GitHub main; calisma dizini temiz
+- Vercel env kontrolu: AUTH_SECRET artik TANIMLI (production, sensitive) -
+  onceki oturum worklog'dan sonra eklemis; guncel deploy'da aktif
+- Oturum taklit saldirisi canli test: repo'daki fallback secret ile
+  'user-hakan' (admin) icin HMAC imzali cerez uretildi -> /api/auth/me -> 401
+  REDDEDILDI (fallback anahtar artik kabul edilmiyor - acik kapandi)
+- Odeme callback son durum: paytr forge -> 400 (reddedildi), iyzico forge ->
+  ?payment=failed&reason=payment_provider_not_configured (fail-closed OK)
+- Gercel giris regresyonu: admin login OK -> me admin OK -> admin API 200 OK
+- Canli genel durum: ana sayfa 200/54ms, CSP + X-Frame-Options DENY var,
+  oturumsuz admin 401, tasks 6 gorev
+
+Stage Summary:
+- AUTH_SECRET uretimde aktif: repo'daki fallback anahtarla oturum uretilemiyor
+  (task 13 worklog'undaki son acik onerisi de kapnmis durumda)
+- Task 13 tamamen dogrulandi: temizlik + guvenlik + hiz + deploy + canli test
+- Not: secret rotasyonu gerektiginde Vercel env'de guncellenmeli (tum oturumlar
+  duser); preview/development target'lari gerekirse eklenebilir
