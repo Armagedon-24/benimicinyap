@@ -1,0 +1,1009 @@
+     1→'use client';
+     2→
+     3→import 'leaflet/dist/leaflet.css';
+     4→import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+     5→import { useTheme } from 'next-themes';
+     6→import { turkeyCitiesGeo, TURKEY_CENTER, TURKEY_ZOOM, CITY_ZOOM } from '@/data/cities-geo';
+     7→import trGeoJSON from '@/data/tr-cities.json';
+     8→import type { Task } from '@/lib/types';
+     9→import { MapPin, ArrowLeft, Shield, Info, Lock } from 'lucide-react';
+    10→import { Button } from '@/components/ui/button';
+    11→import { Badge } from '@/components/ui/badge';
+    12→import { Card, CardContent } from '@/components/ui/card';
+    13→import { useAppStore } from '@/store/useAppStore';
+    14→import { toast } from 'sonner';
+    15→
+    16→interface TurkeyMapProps {
+    17→  tasks: Task[];
+    18→  onCitySelect?: (city: string) => void;
+    19→  onTaskClick?: (task: Task) => void;
+    20→  selectedCity?: string | null;
+    21→}
+    22→
+    23→const statusColors: Record<string, string> = {
+    24→  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    25→  assigned: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    26→  in_progress: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+    27→  completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    28→  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    29→};
+    30→const statusLabels: Record<string, string> = {
+    31→  pending: 'Bekliyor', assigned: 'Atandı', in_progress: 'Devam Ediyor', completed: 'Tamamlandı', cancelled: 'İptal',
+    32→};
+    33→
+    34→const categoryColors: Record<string, string> = {
+    35→  'Ev & Bakım Hizmetleri': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    36→  'Kurye & Alışveriş': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    37→  'Resmi İşler & Evrak': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    38→  'Saha Analizi & Kontrol': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    39→  'Saha Doğrulaması & Güvenlik': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    40→  'Tadilat & Küçük Tamirat': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    41→  'Evcil Hayvan Hizmetleri': 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+    42→  'Teknoloji & Cihaz Kurulumu': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+    43→  'Taşıma & Eşya Montajı': 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+    44→  'Özel Ders & Eğitim': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+    45→  'Organizasyon & Yardımcı Güç': 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300',
+    46→};
+    47→
+    48→function getCategoryColor(category: string): string {
+    49→  return categoryColors[category] || 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300';
+    50→}
+    51→
+    52→export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCity: selectedCityProp }: TurkeyMapProps) {
+    53→  const mapRef = useRef<HTMLDivElement>(null);
+    54→  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+    55→  const [isZoomed, setIsZoomed] = useState(false);
+    56→  const [ready, setReady] = useState(false);
+    57→  const mapObjRef = useRef<any>(null);
+    58→  const markersRef = useRef<any>(null);
+    59→  const boundaryRef = useRef<any>(null);
+    60→  const taskMarkersRef = useRef<any[]>([]);
+    61→  const cityPolygonsRef = useRef<any[]>([]);
+    62→  const leafletRef = useRef<any>(null);
+    63→  const tileLayerRef = useRef<any>(null);
+    64→  const refLayerRef = useRef<any>(null);
+    65→  const { theme } = useTheme();
+    66→
+    67→  const { currentUser, addLog } = useAppStore();
+    68→  const isAdmin = currentUser?.role === 'admin';
+    69→  const defaultBoundsRef = useRef<any>([[35.5, 25.5], [42.5, 45.0]]);
+    70→
+    71→  const isZoomedRef = useRef(isZoomed);
+    72→  useEffect(() => {
+    73→    isZoomedRef.current = isZoomed;
+    74→  }, [isZoomed]);
+    75→
+    76→  const isAdminRef = useRef(isAdmin);
+    77→  useEffect(() => {
+    78→    isAdminRef.current = isAdmin;
+    79→  }, [isAdmin]);
+    80→
+    81→
+    82→  useEffect(() => {
+    83→    if (!tileLayerRef.current) return;
+    84→    const isDark = theme === 'dark';
+    85→    tileLayerRef.current.setUrl(
+    86→      isDark
+    87→        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+    88→        : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+    89→    );
+    90→    if (refLayerRef.current) {
+    91→      refLayerRef.current.setUrl(
+    92→        isDark
+    93→          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+    94→          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+    95→      );
+    96→    }
+    97→  }, [theme]);
+    98→
+    99→  const activeOnlyTasks = useMemo(() => {
+   100→    if (!tasks || !Array.isArray(tasks)) return [];
+   101→    return tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled');
+   102→  }, [tasks]);
+   103→
+   104→  const tasksByCity = useMemo(() => {
+   105→    const map: Record<string, Task[]> = {};
+   106→    activeOnlyTasks.forEach((t) => {
+   107→      if (!map[t.city]) map[t.city] = [];
+   108→      map[t.city].push(t);
+   109→    });
+   110→    return map;
+   111→  }, [activeOnlyTasks]);
+   112→
+   113→  const activeCities = useMemo(() => Object.keys(tasksByCity), [tasksByCity]);
+   114→
+   115→  const activeCitiesRef = useRef(activeCities);
+   116→  useEffect(() => {
+   117→    activeCitiesRef.current = activeCities;
+   118→  }, [activeCities]);
+   119→
+   120→  const tasksByCityRef = useRef(tasksByCity);
+   121→  useEffect(() => {
+   122→    tasksByCityRef.current = tasksByCity;
+   123→  }, [tasksByCity]);
+   124→
+   125→  const selectedCityTasks = useMemo(() => {
+   126→    if (!selectedCity) return [];
+   127→    return tasksByCity[selectedCity] || [];
+   128→  }, [selectedCity, tasksByCity]);
+   129→
+   130→  useEffect(() => {
+   131→    if (!mapRef.current || ready) return;
+   132→    let cancelled = false;
+   133→
+   134→    (async () => {
+   135→      const leafletMod = await import('leaflet');
+   136→      const L = leafletMod.default;
+   137→      leafletRef.current = L;
+   138→      if (cancelled || !mapRef.current) return;
+   139→
+   140→      const map = L.map(mapRef.current, {
+   141→        zoomControl: false,
+   142→        attributionControl: false,
+   143→        minZoom: 4,
+   144→        maxZoom: 14,
+   145→      });
+   146→
+   147→      // Fit bounds based on user session or admin global default setting
+   148→      const savedUserView = typeof window !== 'undefined' ? sessionStorage.getItem('benimicinyap_user_map_view') : null;
+   149→      let initialViewLoaded = false;
+   150→
+   151→      if (savedUserView) {
+   152→        try {
+   153→          const { center, zoom } = JSON.parse(savedUserView);
+   154→          map.setView(center, zoom);
+   155→          initialViewLoaded = true;
+   156→        } catch (e) {
+   157→          console.warn("Error parsing saved view:", e);
+   158→        }
+   159→      }
+   160→
+   161→      if (!initialViewLoaded) {
+   162→        fetch('/api/admin/settings')
+   163→          .then((res) => res.json())
+   164→          .then((data) => {
+   165→            if (data.success && Array.isArray(data.settings)) {
+   166→              const boundsSetting = data.settings.find((s: any) => s.key === 'map_default_bounds');
+   167→              if (boundsSetting && boundsSetting.value) {
+   168→                try {
+   169→                  const bounds = JSON.parse(boundsSetting.value);
+   170→                  defaultBoundsRef.current = bounds;
+   171→                  map.fitBounds(bounds, { padding: [10, 10] });
+   172→                  return;
+   173→                } catch {}
+   174→              }
+   175→            }
+   176→            map.fitBounds([[35.5, 25.5], [42.5, 45.0]], { padding: [10, 10] });
+   177→          })
+   178→          .catch(() => {
+   179→            map.fitBounds([[35.5, 25.5], [42.5, 45.0]], { padding: [10, 10] });
+   180→          });
+   181→      }
+   182→
+   183→      // Minimalist Canvas tile layer (Clean, sleek, zero green/river clutter, 100% free)
+   184→      const isDarkInit = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+   185→      const tileLayer = L.tileLayer(
+   186→        isDarkInit
+   187→          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+   188→          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+   189→        {
+   190→          maxZoom: 16,
+   191→          attribution: '&copy; Esri, DeLorme, NAVTEQ',
+   192→        }
+   193→      ).addTo(map);
+   194→      tileLayerRef.current = tileLayer;
+   195→
+   196→      // Reference layer for city & province labels
+   197→      const refLayer = L.tileLayer(
+   198→        isDarkInit
+   199→          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+   200→          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+   201→        {
+   202→          maxZoom: 16,
+   203→          pane: 'overlayPane',
+   204→          zIndex: 350,
+   205→        }
+   206→      ).addTo(map);
+   207→      refLayerRef.current = refLayer;
+   208→
+   209→      L.control.zoom({ position: 'bottomright' }).addTo(map);
+   210→
+   211→      // Listen for user pan/zoom to save their view state
+   212→      map.on('moveend zoomend', () => {
+   213→        if (!isZoomedRef.current) {
+   214→          try {
+   215→            const bounds = map.getBounds();
+   216→            const boundsVal = JSON.stringify([
+   217→              [bounds.getSouthWest().lat, bounds.getSouthWest().lng],
+   218→              [bounds.getNorthEast().lat, bounds.getNorthEast().lng]
+   219→            ]);
+   220→
+   221→            const viewState = {
+   222→              center: [map.getCenter().lat, map.getCenter().lng],
+   223→              zoom: map.getZoom(),
+   224→            };
+   225→            sessionStorage.setItem('benimicinyap_user_map_view', JSON.stringify(viewState));
+   226→
+   227→            // Autosave admin default bounds on change (eliminates manual 'sabitle' button)
+   228→            if (isAdminRef.current) {
+   229→              fetch('/api/admin/settings', {
+   230→                method: 'PUT',
+   231→                headers: { 'Content-Type': 'application/json' },
+   232→                body: JSON.stringify({
+   233→                  settings: [
+   234→                    { key: 'map_default_bounds', value: boundsVal }
+   235→                  ]
+   236→                })
+   237→              }).catch(() => {});
+   238→            }
+   239→          } catch {}
+   240→        }
+   241→      });
+   242→
+   243→      // 81 İl Sınırları Katmanı (Tüm Türkiye İlleri - Tıklanabilir & Vurgulanabilir)
+   244→      L.geoJSON(trGeoJSON as any, {
+   245→        style: (feature: any) => {
+   246→          const cityName = feature?.properties?.name;
+   247→          const hasTasks = cityName && activeCitiesRef.current.includes(cityName);
+   248→          return {
+   249→            color: hasTasks ? '#2563eb' : '#64748b',
+   250→            weight: hasTasks ? 1.5 : 0.9,
+   251→            fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+   252→            fillOpacity: hasTasks ? 0.15 : 0.05,
+   253→            opacity: 0.75,
+   254→          };
+   255→        },
+   256→        onEachFeature: (feature: any, layer: any) => {
+   257→          const cityName = feature?.properties?.name;
+   258→          if (!cityName) return;
+   259→          const cityGeo = turkeyCitiesGeo.find((c) => normalizeName(c.name) === normalizeName(cityName));
+   260→
+   261→          layer.on({
+   262→            mouseover: (e: any) => {
+   263→              const target = e.target;
+   264→              target.setStyle({
+   265→                weight: 2.5,
+   266→                color: '#1d4ed8',
+   267→                fillOpacity: 0.28,
+   268→              });
+   269→              if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+   270→                target.bringToFront();
+   271→              }
+   272→            },
+   273→            mouseout: (e: any) => {
+   274→              const target = e.target;
+   275→              const hasTasks = activeCitiesRef.current.includes(cityName);
+   276→              target.setStyle({
+   277→                color: hasTasks ? '#2563eb' : '#64748b',
+   278→                weight: hasTasks ? 1.5 : 0.9,
+   279→                fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+   280→                fillOpacity: hasTasks ? 0.15 : 0.05,
+   281→                opacity: 0.75,
+   282→              });
+   283→            },
+   284→            click: () => {
+   285→              if (cityGeo) {
+   286→                flyToCity(L, map, cityGeo, tasksByCityRef.current, onCitySelect, onTaskClick, taskMarkersRef, boundaryRef);
+   287→                setSelectedCity(cityGeo.name);
+   288→                setIsZoomed(true);
+   289→              }
+   290→            },
+   291→          });
+   292→          cityPolygonsRef.current.push(layer);
+   293→        },
+   294→      }).addTo(map);
+   295→
+   296→      // Add markers
+   297→      const markers = L.layerGroup().addTo(map);
+   298→      turkeyCitiesGeo.forEach((city) => {
+   299→        const hasTasks = activeCities.includes(city.name);
+   300→        const cityTasks = hasTasks ? (tasksByCity[city.name] || []) : [];
+   301→        const taskCount = cityTasks.length;
+   302→        const statusBreakdown = getCityStatusBreakdown(cityTasks);
+   303→
+   304→        const marker = L.marker([city.lat, city.lng], {
+   305→          icon: hasTasks
+   306→            ? createStatusIcon(L, taskCount, statusBreakdown)
+   307→            : createInactiveIcon(L),
+   308→          zIndexOffset: hasTasks ? 1000 : 1,
+   309→        });
+   310→
+   311→        if (hasTasks) {
+   312→          marker.bindTooltip(
+   313→            buildCityTooltip(city.name, taskCount, statusBreakdown),
+   314→            { direction: 'top', offset: [0, -18], className: 'city-tooltip-clean' }
+   315→          );
+   316→        }
+   317→
+   318→        marker.on('click', () => {
+   319→          if (!mapObjRef.current) return;
+   320→          flyToCity(L, map, city, tasksByCity, onCitySelect, onTaskClick, taskMarkersRef, boundaryRef);
+   321→          setSelectedCity(city.name);
+   322→          setIsZoomed(true);
+   323→        });
+   324→        markers.addLayer(marker);
+   325→      });
+   326→      markersRef.current = markers;
+   327→      mapObjRef.current = map;
+   328→      setReady(true);
+   329→    })();
+   330→
+   331→    return () => {
+   332→      cancelled = true;
+   333→      if (mapObjRef.current) {
+   334→        mapObjRef.current.remove();
+   335→        mapObjRef.current = null;
+   336→      }
+   337→      setReady(false);
+   338→    };
+   339→  }, []);
+   340→
+   341→  // Update markers when tasks change
+   342→  useEffect(() => {
+   343→    if (!ready || !markersRef.current || !mapObjRef.current || !leafletRef.current) return;
+   344→    const L = leafletRef.current;
+   345→    markersRef.current.clearLayers();
+   346→
+   347→    turkeyCitiesGeo.forEach((city) => {
+   348→      const hasTasks = activeCities.includes(city.name);
+   349→      const cityTasks = hasTasks ? (tasksByCity[city.name] || []) : [];
+   350→      const taskCount = cityTasks.length;
+   351→      const statusBreakdown = getCityStatusBreakdown(cityTasks);
+   352→
+   353→      const marker = L.marker([city.lat, city.lng], {
+   354→        icon: hasTasks
+   355→          ? createStatusIcon(L, taskCount, statusBreakdown)
+   356→          : createInactiveIcon(L),
+   357→        zIndexOffset: hasTasks ? 1000 : 1,
+   358→      });
+   359→
+   360→      if (hasTasks) {
+   361→        marker.bindTooltip(
+   362→          buildCityTooltip(city.name, taskCount, statusBreakdown),
+   363→          { direction: 'top', offset: [0, -18], className: 'city-tooltip-clean' }
+   364→        );
+   365→      }
+   366→
+   367→      marker.on('click', () => {
+   368→        if (!mapObjRef.current) return;
+   369→        flyToCity(L, mapObjRef.current, city, tasksByCity, onCitySelect, onTaskClick, taskMarkersRef, boundaryRef);
+   370→        setSelectedCity(city.name);
+   371→        setIsZoomed(true);
+   372→      });
+   373→      markersRef.current.addLayer(marker);
+   374→    });
+   375→  }, [ready, activeCities, tasksByCity, onCitySelect, onTaskClick]);
+   376→
+   377→  const handleBackToTurkey = useCallback(() => {
+   378→    if (!mapObjRef.current || !leafletRef.current) return;
+   379→    setSelectedCity(null);
+   380→    setIsZoomed(false);
+   381→    onCitySelect?.('');
+   382→    if (boundaryRef.current) {
+   383→      mapObjRef.current.removeLayer(boundaryRef.current);
+   384→      boundaryRef.current = null;
+   385→    }
+   386→    taskMarkersRef.current.forEach((m) => {
+   387→      if (mapObjRef.current!.hasLayer(m)) mapObjRef.current!.removeLayer(m);
+   388→    });
+   389→    taskMarkersRef.current = [];
+   390→    cityPolygonsRef.current.forEach((p: any) => {
+   391→      const cityName = p?.feature?.properties?.name;
+   392→      const hasTasks = cityName && activeCitiesRef.current.includes(cityName);
+   393→      p.setStyle({
+   394→        color: hasTasks ? '#2563eb' : '#64748b',
+   395→        weight: hasTasks ? 1.5 : 0.9,
+   396→        fillColor: hasTasks ? '#3b82f6' : '#94a3b8',
+   397→        fillOpacity: hasTasks ? 0.15 : 0.05,
+   398→        opacity: 0.75,
+   399→      });
+   400→    });
+   401→    mapObjRef.current.flyToBounds(defaultBoundsRef.current, { duration: 1.2, padding: [10, 10], easeLinearity: 0.25 });
+   402→  }, [onCitySelect]);
+   403→
+   404→  // Sync with external selectedCity prop
+   405→  useEffect(() => {
+   406→    if (!ready || selectedCityProp === undefined) return;
+   407→    const L = leafletRef.current;
+   408→    if (!L) return;
+   409→    if (selectedCityProp && selectedCityProp !== selectedCity) {
+   410→      const city = turkeyCitiesGeo.find((c) => c.name === selectedCityProp);
+   411→      if (city && mapObjRef.current) {
+   412→        flyToCity(L, mapObjRef.current, city, tasksByCity, onCitySelect, onTaskClick, taskMarkersRef, boundaryRef);
+   413→        setSelectedCity(selectedCityProp);
+   414→        setIsZoomed(true);
+   415→      }
+   416→    } else if (!selectedCityProp && selectedCity && mapObjRef.current) {
+   417→      handleBackToTurkey();
+   418→    }
+   419→  }, [selectedCityProp, ready, handleBackToTurkey, selectedCity, tasksByCity, onCitySelect, onTaskClick]);
+   420→
+   421→  const formatTL = (amount: number) =>
+   422→    new Intl.NumberFormat('tr-TR').format(amount) + ' ₺';
+   423→
+   424→  // Active (non-completed, non-cancelled) tasks for sidebar
+   425→  const activeTasks = useMemo(() => {
+   426→    if (!tasks || !Array.isArray(tasks)) return [];
+   427→    return tasks.filter((t) => t.status === 'pending' || t.status === 'assigned' || t.status === 'in_progress');
+   428→  }, [tasks]);
+   429→
+   430→  // Group active tasks by city
+   431→  const activeTasksByCity = useMemo(() => {
+   432→    const map: Record<string, Task[]> = {};
+   433→    activeTasks.forEach((t) => {
+   434→      if (!map[t.city]) map[t.city] = [];
+   435→      map[t.city].push(t);
+   436→    });
+   437→    return map;
+   438→  }, [activeTasks]);
+   439→
+   440→  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+   441→
+   442→  return (
+   443→    <div className="relative w-full flex flex-col">
+   444→      {/* Map + Sidebar Row */}
+   445→      <div className="flex flex-col md:flex-row gap-3">
+   446→      {/* Left Sidebar - Active Task List (desktop only) */}
+   447→      <div className={`${sidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden' : 'md:w-80 shrink-0'} hidden md:flex transition-all duration-300`}>
+   448→        <div className="glass-card rounded-xl shadow-sm h-[420px] flex flex-col overflow-hidden w-full">
+   449→          {/* Sidebar Header */}
+   450→          <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-white/5">
+   451→            <div className="flex items-center justify-between">
+   452→              <div className="flex items-center gap-2">
+   453→                <div className="w-6 h-6 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+   454→                  <span className="text-[10px] font-bold text-green-700 dark:text-green-300">{activeTasks.length}</span>
+   455→                </div>
+   456→                <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-100">Aktif Görevler</h4>
+   457→              </div>
+   458→              <button
+   459→                onClick={() => setSidebarCollapsed(true)}
+   460→                className="w-6 h-6 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors"
+   461→              >
+   462→                <span className="text-xs text-muted-foreground">◂</span>
+   463→              </button>
+   464→            </div>
+   465→          </div>
+   466→
+   467→          {/* Task List */}
+   468→          <div className="flex-1 overflow-y-auto">
+   469→            {Object.entries(activeTasksByCity).map(([city, cityTasks]) => (
+   470→              <div key={city}>
+   471→                {/* City group header */}
+   472→                <div className="px-3 py-2 bg-slate-50/80 dark:bg-slate-800/50 sticky top-0 z-10">
+   473→                  <div className="flex items-center gap-1.5">
+   474→                    <MapPin className="w-3 h-3 text-blue-500" />
+   475→                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">{city}</span>
+   476→                    <Badge variant="secondary" className="text-[9px] ml-auto px-1.5 py-0">{cityTasks.length}</Badge>
+   477→                  </div>
+   478→                </div>
+   479→
+   480→                {/* Tasks under this city */}
+   481→                {cityTasks.map((task) => (
+   482→                  <div
+   483→                    key={task.id}
+   484→                    className="px-3 py-2.5 border-b border-slate-50 dark:border-slate-800/50 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 cursor-pointer transition-colors group"
+   485→                    onClick={() => onTaskClick?.(task)}
+   486→                  >
+   487→                    {/* Category + Status */}
+   488→                    <div className="flex items-center justify-between mb-1">
+   489→                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${getCategoryColor(task.category)}`}>
+   490→                        {task.category}
+   491→                      </span>
+   492→                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${statusColors[task.status] || statusColors.pending}`}>
+   493→                        {statusLabels[task.status] || task.status}
+   494→                      </span>
+   495→                    </div>
+   496→
+   497→                    {/* Title */}
+   498→                    <p className="text-xs font-semibold leading-snug line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+   499→                      {task.title}
+   500→                    </p>
+   501→
+   502→                    {/* District + Fee + Action */}
+   503→                    <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100/50 dark:border-slate-800/40">
+   504→                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+   505→                        <MapPin className="w-2.5 h-2.5" />
+   506→                        {task.district || city}
+   507→                      </span>
+   508→                      <div className="flex items-center gap-1.5">
+   509→                        <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
+   510→                          {formatTL(task.fee)}
+   511→                        </span>
+   512→                        {task.status === 'pending' && (
+   513→                          <span className="text-[9px] font-semibold bg-blue-600 text-white px-1.5 py-0.5 rounded">
+   514→                            Kabul Et
+   515→                          </span>
+   516→                        )}
+   517→                      </div>
+   518→                    </div>
+   519→                  </div>
+   520→                ))}
+   521→              </div>
+   522→            ))}
+   523→
+   524→            {activeTasks.length === 0 && (
+   525→              <div className="p-6 text-center">
+   526→                <MapPin className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+   527→                <p className="text-xs text-muted-foreground">Aktif görev bulunmuyor</p>
+   528→              </div>
+   529→            )}
+   530→          </div>
+   531→
+   532→          {/* Sidebar Footer - Stats */}
+   533→          <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+   534→            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   535→              <span>{activeCities.length} aktif il</span>
+   536→              <span>{activeTasks.length} aktif görev</span>
+   537→            </div>
+   538→          </div>
+   539→        </div>
+   540→      </div>
+   541→
+   542→      {/* Map Area */}
+   543→      <div className="flex-1 relative min-w-0">
+   544→        {/* Expand sidebar button */}
+   545→        {sidebarCollapsed && (
+   546→          <button
+   547→            onClick={() => setSidebarCollapsed(false)}
+   548→            className="absolute top-3 left-3 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm rounded-lg shadow-md border border-slate-200 dark:border-slate-700 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+   549→            title="Görev Listesini Aç"
+   550→          >
+   551→            <span className="text-xs text-muted-foreground">▸</span>
+   552→          </button>
+   553→        )}
+   554→
+   555→        {/* Map Header Overlay - only shown on desktop (hidden on mobile) */}
+   556→        {!isZoomed && !sidebarCollapsed && (
+   557→          <div className="hidden sm:block absolute top-3 left-3 z-[1000] max-w-xs">
+   558→            <div className="glass-card rounded-xl shadow-lg p-2.5">
+   559→              <div className="flex items-center gap-1.5 mb-1">
+   560→                <Shield className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+   561→                <h3 className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+   562→                  Coğrafi Güvenlik Haritası
+   563→                </h3>
+   564→              </div>
+   565→              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+   566→                Görevli illere tıklayarak aktif görevleri ve sınır koruma alanlarını inceleyin.
+   567→              </p>
+   568→            </div>
+   569→          </div>
+   570→        )}
+   571→
+   572→        <div ref={mapRef} className="w-full rounded-xl overflow-hidden h-[420px] sm:h-[400px] md:h-[420px]" />
+   573→
+   574→      {/* Back button when zoomed */}
+   575→      {isZoomed && (
+   576→        <Button
+   577→          variant="outline"
+   578→          size="sm"
+   579→          className="absolute top-3 left-3 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-md gap-1.5"
+   580→          onClick={handleBackToTurkey}
+   581→        >
+   582→          <ArrowLeft className="w-4 h-4" />
+   583→          Türkiye&apos;ye Dön
+   584→        </Button>
+   585→      )}
+   586→
+   587→      {/* Zoomed-in city: Active tasks panel on right */}
+   588→      {isZoomed && selectedCity && (
+   589→        <div className="absolute top-3 right-3 z-[1000] w-52 sm:w-64 max-h-[260px] sm:max-h-[400px]">
+   590→          <div className="glass-card rounded-xl shadow-lg overflow-hidden">
+   591→            <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-white/5">
+   592→              <div className="flex items-center gap-2">
+   593→                <MapPin className="w-4 h-4 text-blue-600" />
+   594→                <h4 className="font-semibold text-sm">{selectedCity}</h4>
+   595→                <Badge variant="secondary" className="text-[10px] ml-auto">{selectedCityTasks.length} görev</Badge>
+   596→              </div>
+   597→            </div>
+   598→            <div className="overflow-y-auto max-h-[200px] sm:max-h-[320px]">
+   599→              {selectedCityTasks.map((task) => (
+   600→                <div
+   601→                  key={task.id}
+   602→                  className="p-3 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+   603→                  onClick={() => onTaskClick?.(task)}
+   604→                >
+   605→                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${getCategoryColor(task.category)}`}>
+   606→                    {task.category}
+   607→                  </span>
+   608→                  <p className="text-xs font-semibold mt-1 leading-snug line-clamp-2">{task.title}</p>
+   609→                  <div className="flex items-center justify-between mt-1.5">
+   610→                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+   611→                      <MapPin className="w-3 h-3" />
+   612→                      {task.district || selectedCity}
+   613→                    </span>
+   614→                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{formatTL(task.fee)}</span>
+   615→                  </div>
+   616→                </div>
+   617→              ))}
+   618→              {selectedCityTasks.length === 0 && (
+   619→                <div className="p-6 text-center">
+   620→                  <p className="text-xs text-muted-foreground">Bu ilde aktif görev bulunmuyor</p>
+   621→                </div>
+   622→              )}
+   623→            </div>
+   624→          </div>
+   625→        </div>
+   626→      )}
+   627→
+   628→      {/* Legend - bottom left when not zoomed */}
+   629→      {!isZoomed && (
+   630→        <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 px-2.5 py-2">
+   631→          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Görev Durumu</p>
+   632→          <div className="flex flex-col gap-1">
+   633→            {[
+   634→              { color: '#f59e0b', label: 'Bekleyen' },
+   635→              { color: '#a855f7', label: 'Devam Eden' },
+   636→              { color: '#3b82f6', label: 'Mevcut İş' },
+   637→            ].map(({ color, label }) => (
+   638→              <div key={label} className="flex items-center gap-1.5">
+   639→                <div className="w-3 h-3 rounded-full shrink-0 border border-white/50 shadow-sm" style={{ background: color }} />
+   640→                <span className="text-[10px] text-slate-600 dark:text-slate-300 font-medium">{label}</span>
+   641→              </div>
+   642→            ))}
+   643→          </div>
+   644→        </div>
+   645→      )}
+   646→
+   647→
+   648→      {/* Bottom info bar - desktop only */}
+   649→      {!isZoomed && (
+   650→        <div className="hidden sm:flex absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]">
+   651→          <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm rounded-full shadow-md border border-slate-200 dark:border-slate-800 px-4 py-1.5">
+   652→            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+   653→              <Info className="w-3 h-3" />
+   654→              Şehre tıklayarak aktif görevleri görüntüleyin
+   655→            </p>
+   656→          </div>
+   657→        </div>
+   658→      )}
+   659→      </div>
+   660→      {/* End Map Area */}
+   661→      </div>
+   662→      {/* End Map + Sidebar Row */}
+   663→
+   664→      {/* Escrow info panel below map */}
+   665→      <div className="mt-3 grid grid-cols-1 gap-3 shrink-0">
+   666→        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-xl border border-blue-100 dark:border-blue-900/30 p-4">
+   667→          <div className="flex items-start gap-3">
+   668→            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+   669→              <Shield className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+   670→            </div>
+   671→            <div>
+   672→              <h4 className="text-xs font-bold text-blue-800 dark:text-blue-200">Güvenlik Havuzu ve T.C. Kimlik Doğrulaması</h4>
+   673→              <p className="text-[11px] text-blue-600/80 dark:text-blue-300/70 mt-1 leading-relaxed">
+   674→                Ödemeleriniz güvenlik havuzunda bloke edilir, T.C. kimlik doğrulaması yasal mevzuat gereğidir.
+   675→              </p>
+   676→              <Button variant="link" className="text-[11px] text-blue-600 dark:text-blue-400 p-0 h-auto mt-1">
+   677→                Detaylı Bilgi Al
+   678→              </Button>
+   679→            </div>
+   680→          </div>
+   681→        </div>
+   682→        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-xl border border-amber-100 dark:border-amber-900/30 p-4">
+   683→          <div className="flex items-start gap-3">
+   684→            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+   685→              <Lock className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400" />
+   686→            </div>
+   687→            <div>
+   688→              <h4 className="text-xs font-bold text-amber-800 dark:text-amber-200">Escrow Güvenlik Sistemi</h4>
+   689→              <p className="text-[11px] text-amber-600/80 dark:text-amber-300/70 mt-1 leading-relaxed">
+   690→                Görev ücreti escrow havuzunda bloke edilir, görev tamamlandığında hizmet verene ödeme yapılır.
+   691→              </p>
+   692→              <Button variant="link" className="text-[11px] text-amber-600 dark:text-amber-400 p-0 h-auto mt-1">
+   693→                Nasıl Çalışır?
+   694→              </Button>
+   695→            </div>
+   696→          </div>
+   697→        </div>
+   698→      </div>
+   699→
+   700→      <style jsx global>{`
+   701→        .city-tooltip-clean {
+   702→          background: white !important;
+   703→          border: 1px solid #e2e8f0 !important;
+   704→          border-radius: 10px !important;
+   705→          padding: 6px 12px !important;
+   706→          box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+   707→          font-family: inherit !important;
+   708→        }
+   709→        .city-tooltip-clean::before {
+   710→          border-top-color: white !important;
+   711→        }
+   712→        .task-marker-label {
+   713→          background: transparent !important;
+   714→          border: none !important;
+   715→        }
+   716→        .leaflet-container { font-family: inherit !important; }
+   717→      `}</style>
+   718→    </div>
+   719→  );
+   720→}
+   721→
+   722→// --- Helper functions ---
+   723→
+   724→// Status color palette (matches user's legend)
+   725→const STATUS_COLORS: Record<string, { bg: string; label: string }> = {
+   726→  pending:     { bg: '#f59e0b', label: 'Bekleyen' },
+   727→  assigned:    { bg: '#3b82f6', label: 'Mevcut İş' },
+   728→  in_progress: { bg: '#a855f7', label: 'Devam Eden' },
+   729→  completed:   { bg: '#22c55e', label: 'Tamamlandı' },
+   730→  cancelled:   { bg: '#ef4444', label: 'İptal' },
+   731→};
+   732→
+   733→interface StatusBreakdown {
+   734→  pending: number;
+   735→  assigned: number;
+   736→  in_progress: number;
+   737→  completed: number;
+   738→  cancelled: number;
+   739→  dominantColor: string;
+   740→}
+   741→
+   742→function getCityStatusBreakdown(tasks: Task[]): StatusBreakdown {
+   743→  const counts = { pending: 0, assigned: 0, in_progress: 0, completed: 0, cancelled: 0 };
+   744→  tasks.forEach((t) => {
+   745→    const s = t.status as keyof typeof counts;
+   746→    if (s in counts) counts[s]++;
+   747→  });
+   748→  // Dominant color: prefer active statuses first
+   749→  const priority: Array<keyof typeof counts> = ['in_progress', 'pending', 'assigned', 'completed', 'cancelled'];
+   750→  const dominant = priority.find((s) => counts[s] > 0) || 'pending';
+   751→  return { ...counts, dominantColor: STATUS_COLORS[dominant]?.bg || '#3b82f6' };
+   752→}
+   753→
+   754→function createStatusIcon(L: any, count: number, breakdown: StatusBreakdown) {
+   755→  const displayCount = count > 99 ? '99+' : String(count);
+   756→  const size = 34; // compact task count badge
+   757→  const r = size / 2 - 3;
+   758→  const cx = size / 2;
+   759→  const cy = size / 2;
+   760→
+   761→  // Build pie segments for the ring based on status breakdown
+   762→  const activeStatuses: Array<{ key: string; count: number }> = [
+   763→    { key: 'pending', count: breakdown.pending },
+   764→    { key: 'in_progress', count: breakdown.in_progress },
+   765→    { key: 'assigned', count: breakdown.assigned },
+   766→  ].filter((s) => s.count > 0);
+   767→
+   768→  const total = activeStatuses.reduce((s, x) => s + x.count, 0) || 1;
+   769→  let segmentsSvg = '';
+   770→  let startAngle = -90; // Start from top
+   771→
+   772→  if (activeStatuses.length === 1) {
+   773→    // Single color circle
+   774→    const color = STATUS_COLORS[activeStatuses[0].key]?.bg || breakdown.dominantColor;
+   775→    segmentsSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="white" stroke-width="1.5" class="dark:stroke-[#0B0C16]"/>`;
+   776→  } else {
+   777→    // Multi-color ring segments
+   778→    segmentsSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${breakdown.dominantColor}" stroke="white" stroke-width="1.5" class="dark:stroke-[#0B0C16]"/>`;
+   779→    activeStatuses.forEach((seg) => {
+   780→      const angle = (seg.count / total) * 360;
+   781→      const endAngle = startAngle + angle;
+   782→      const rad = Math.PI / 180;
+   783→      const x1 = cx + r * Math.cos(startAngle * rad);
+   784→      const y1 = cy + r * Math.sin(startAngle * rad);
+   785→      const x2 = cx + r * Math.cos(endAngle * rad);
+   786→      const y2 = cy + r * Math.sin(endAngle * rad);
+   787→      const largeArc = angle > 180 ? 1 : 0;
+   788→      const color = STATUS_COLORS[seg.key]?.bg || '#888';
+   789→      segmentsSvg += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z" fill="${color}" stroke="white" stroke-width="0.5" class="dark:stroke-[#0B0C16]"/>`;
+   790→      startAngle = endAngle;
+   791→    });
+   792→  }
+   793→
+   794→  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+   795→  const glowFilter = isDark ? `
+   796→    <defs>
+   797→      <filter id="neon-glow" x="-30%" y="-30%" width="160%" height="160%">
+   798→        <feGaussianBlur stdDeviation="2.5" result="blur" />
+   799→        <feComponentTransfer in="blur" result="boost">
+   800→          <feFuncA type="linear" slope="2"/>
+   801→        </feComponentTransfer>
+   802→        <feMerge>
+   803→          <feMergeNode in="boost" />
+   804→          <feMergeNode in="SourceGraphic" />
+   805→        </feMerge>
+   806→      </filter>
+   807→    </defs>
+   808→  ` : '';
+   809→
+   810→  const filterAttr = isDark ? 'filter="url(#neon-glow)"' : '';
+   811→
+   812→  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+   813→    ${glowFilter}
+   814→    <g ${filterAttr}>
+   815→      ${segmentsSvg}
+   816→    </g>
+   817→    <circle cx="${cx}" cy="${cy}" r="${r - 5}" fill="white" class="dark:fill-[#0B0C16]"/>
+   818→    <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle" fill="${isDark ? '#4ade80' : breakdown.dominantColor}" font-size="10" font-weight="900" font-family="system-ui" class="dark:fill-[#4ade80]">${displayCount}</text>
+   819→  </svg>`;
+   820→
+   821→  return L.divIcon({
+   822→    html: svg,
+   823→    className: 'task-marker-label',
+   824→    iconSize: [size, size],
+   825→    iconAnchor: [size / 2, size / 2],
+   826→  });
+   827→}
+   828→
+   829→function buildCityTooltip(cityName: string, total: number, breakdown: StatusBreakdown): string {
+   830→  const rows: string[] = [];
+   831→  const active: Array<[string, number]> = [
+   832→    ['pending', breakdown.pending],
+   833→    ['in_progress', breakdown.in_progress],
+   834→    ['assigned', breakdown.assigned],
+   835→  ].filter(([, c]) => (c as number) > 0) as Array<[string, number]>;
+   836→
+   837→  active.forEach(([key, count]) => {
+   838→    const color = STATUS_COLORS[key]?.bg || '#888';
+   839→    const label = STATUS_COLORS[key]?.label || key;
+   840→    rows.push(`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};"></span><span style="color:#555;font-size:10px;">${label}: ${count}</span></span>`);
+   841→  });
+   842→
+   843→  return `<div style="text-align:center;min-width:120px;"><div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:3px;">${cityName}</div><div style="font-size:10px;color:#64748b;margin-bottom:4px;">${total} görev</div><div style="display:flex;flex-wrap:wrap;justify-content:center;gap:2px;">${rows.join('')}</div></div>`;
+   844→}
+   845→
+   846→function createInactiveIcon(L: any) {
+   847→  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+   848→    <circle cx="4" cy="4" r="3" fill="#94a3b8" opacity="0.6" stroke="white" stroke-width="1"/>
+   849→  </svg>`;
+   850→  return L.divIcon({
+   851→    html: svg,
+   852→    className: 'task-marker-label',
+   853→    iconSize: [8, 8],
+   854→    iconAnchor: [4, 4],
+   855→  });
+   856→}
+   857→
+   858→const normalizeName = (name: string) => {
+   859→  return name
+   860→    .toLowerCase()
+   861→    .replace(/ğ/g, 'g')
+   862→    .replace(/ü/g, 'u')
+   863→    .replace(/ş/g, 's')
+   864→    .replace(/ı/g, 'i')
+   865→    .replace(/ö/g, 'o')
+   866→    .replace(/ç/g, 'c')
+   867→    .replace(/â/g, 'a')
+   868→    .replace(/î/g, 'i')
+   869→    .replace(/û/g, 'u')
+   870→    .replace(/[^a-z0-9]/g, '')
+   871→    .trim();
+   872→};
+   873→
+   874→// Build a lookup map from normalized GeoJSON names → feature (created once)
+   875→const geoJSONLookup: Record<string, any> = {};
+   876→(trGeoJSON as any).features.forEach((f: any) => {
+   877→  const normalized = normalizeName(f.properties.name);
+   878→  geoJSONLookup[normalized] = f;
+   879→});
+   880→
+   881→function findGeoFeature(cityName: string): any | null {
+   882→  const normalizedCity = normalizeName(cityName);
+   883→
+   884→  // 1. Exact match
+   885→  if (geoJSONLookup[normalizedCity]) return geoJSONLookup[normalizedCity];
+   886→
+   887→  // 2. GeoJSON name is shorter prefix of city (e.g. "afyon" matches "afyonkarahisar")
+   888→  for (const [key, feature] of Object.entries(geoJSONLookup)) {
+   889→    if (normalizedCity.startsWith(key) || key.startsWith(normalizedCity)) {
+   890→      return feature;
+   891→    }
+   892→  }
+   893→
+   894→  // 3. Substring match
+   895→  for (const [key, feature] of Object.entries(geoJSONLookup)) {
+   896→    if (normalizedCity.includes(key) || key.includes(normalizedCity)) {
+   897→      return feature;
+   898→    }
+   899→  }
+   900→
+   901→  return null;
+   902→}
+   903→
+   904→function flyToCity(
+   905→  L: any,
+   906→  map: any,
+   907→  city: { name: string; lat: number; lng: number; bounds: [number, number][] },
+   908→  tasksByCity: Record<string, Task[]>,
+   909→  onCitySelect?: (city: string) => void,
+   910→  onTaskClick?: (task: Task) => void,
+   911→  taskMarkersRef?: React.MutableRefObject<any[]>,
+   912→  boundaryRef?: React.MutableRefObject<any>,
+   913→) {
+   914→  onCitySelect?.(city.name);
+   915→
+   916→  if (boundaryRef?.current) {
+   917→    try {
+   918→      map.removeLayer(boundaryRef.current);
+   919→    } catch (e) {
+   920→      console.warn("Could not remove layer via ref:", e);
+   921→    }
+   922→    boundaryRef.current = null;
+   923→  }
+   924→  const boundaryEl = document.querySelector('.city-boundary-highlight');
+   925→  if (boundaryEl) boundaryEl.remove();
+   926→
+   927→  if (taskMarkersRef?.current) {
+   928→    taskMarkersRef.current.forEach((m) => {
+   929→      if (map.hasLayer(m)) map.removeLayer(m);
+   930→    });
+   931→    taskMarkersRef.current = [];
+   932→  }
+   933→
+   934→  // Find real detailed boundary feature in loaded GeoJSON using robust lookup
+   935→  const feature = findGeoFeature(city.name);
+   936→
+   937→  let boundaryLayer: any;
+   938→  if (feature) {
+   939→    boundaryLayer = L.geoJSON(feature, {
+   940→      style: {
+   941→        color: '#ef4444',
+   942→        fillColor: '#ef4444',
+   943→        fillOpacity: 0.18,
+   944→        weight: 4.5,
+   945→        dashArray: '10 5',
+   946→      },
+   947→      className: 'city-boundary-highlight',
+   948→    }).addTo(map);
+   949→  } else {
+   950→    // Fallback to simplified boundary if not found
+   951→    boundaryLayer = L.polygon(
+   952→      city.bounds.map((b) => [b[0], b[1]]),
+   953→      {
+   954→        color: '#ef4444',
+   955→        fillColor: '#ef4444',
+   956→        fillOpacity: 0.18,
+   957→        weight: 4.5,
+   958→        dashArray: '10 5',
+   959→        className: 'city-boundary-highlight',
+   960→      }
+   961→    ).addTo(map);
+   962→  }
+   963→
+   964→  // fly to the bounds of the boundary layer dynamically for perfect responsive layout on mobile/desktop
+   965→  try {
+   966→    map.flyToBounds(boundaryLayer.getBounds(), { duration: 1.5, padding: [25, 25], easeLinearity: 0.25 });
+   967→  } catch (e) {
+   968→    console.warn("Could not fly to bounds:", e);
+   969→    map.flyTo([city.lat, city.lng], CITY_ZOOM, { duration: 1.5, easeLinearity: 0.25 });
+   970→  }
+   971→
+   972→  if (boundaryRef) {
+   973→    boundaryRef.current = boundaryLayer;
+   974→  }
+   975→
+   976→  // Task markers with fee labels, colored by status
+   977→  const statusMarkerStyles: Record<string, { bg: string; shadow: string; label: string }> = {
+   978→    pending:     { bg: '#f59e0b', shadow: 'rgba(245,158,11,0.45)', label: 'Bekleyen' },
+   979→    assigned:    { bg: '#3b82f6', shadow: 'rgba(59,130,246,0.45)', label: 'Mevcut' },
+   980→    in_progress: { bg: '#a855f7', shadow: 'rgba(168,85,247,0.45)', label: 'Devam Eden' },
+   981→    completed:   { bg: '#22c55e', shadow: 'rgba(34,197,94,0.40)', label: 'Tamamlandı' },
+   982→    cancelled:   { bg: '#ef4444', shadow: 'rgba(239,68,68,0.40)', label: 'İptal' },
+   983→  };
+   984→
+   985→  const cityTasks = tasksByCity[city.name] || [];
+   986→  cityTasks.forEach((task) => {
+   987→    const offsetLat = city.lat + (Math.random() - 0.5) * 0.02;
+   988→    const offsetLng = city.lng + (Math.random() - 0.5) * 0.02;
+   989→    const style = statusMarkerStyles[task.status] || statusMarkerStyles.pending;
+   990→
+   991→    const taskMarker = L.marker([offsetLat, offsetLng], {
+   992→      icon: L.divIcon({
+   993→        html: `<div style="background:${style.bg};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px ${style.shadow};cursor:pointer;border:1.5px solid rgba(255,255,255,0.4);">${task.fee.toLocaleString('tr-TR')} ₺</div>`,
+   994→        className: 'task-marker-label',
+   995→        iconAnchor: [35, 14],
+   996→      }),
+   997→      zIndexOffset: 2000,
+   998→    });
+   999→
+  1000→    taskMarker.bindTooltip(
+  1001→      `<div style="max-width:220px;"><strong>${task.title}</strong><br/><span style="color:#666;">${task.category}</span><br/><span style="display:inline-block;margin-top:3px;background:${style.bg};color:white;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;">${style.label}</span> &nbsp;<span style="color:${style.bg};font-weight:700;">${task.fee.toLocaleString('tr-TR')} ₺</span></div>`,
+  1002→      { direction: 'top', offset: [0, -10], className: 'city-tooltip-clean' }
+  1003→    );
+  1004→
+  1005→    taskMarker.on('click', () => onTaskClick?.(task));
+  1006→    taskMarker.addTo(map);
+  1007→    taskMarkersRef?.current?.push(taskMarker);
+  1008→  });
+  1009→}

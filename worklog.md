@@ -190,3 +190,21 @@ Stage Summary:
   (B) Settings→Git→Connect ile repo bağla + Redeploy — yeni kodu çeker, ileride
   otomatik deploy açılır
 - Üretilen AUTH_SECRET örneği kullanıcıya verildi
+
+---
+Task ID: 6
+Agent: main-agent
+Task: "Türkiye'ye Dön" sonrası haritada tüm görevlerin görünmemesi hatası
+
+Work Log:
+- Canlı login tekrar test edildi: 200 OK — kullanıcı redeploy yapmış, AUTH_SECRET düzeltmesi yayında
+- Kök neden: DiscoverTasks.tsx handleMapCitySelect('') çağrısında mapCityFilter null
+  yapılıyor ama filterCity eski şehirde kalıyordu; fetchTasks ?city=X ile sorgulamaya
+  devam ediyordu → haritaya tek ilin görevleri geliyordu
+- Düzeltme: else dalına setFilterCity('') eklendi
+- Commit ccd4aba push edildi (c2dce2f..ccd4aba)
+
+Stage Summary:
+- Login sorunu canlıda çözülmüş durumda
+- Harita düzeltmesi GitHub'da; yayına alınması için bir redeploy daha gerekiyor
+  (veya Git bağlanırsa bağlantı anında ccd4aba deploy edilir)
