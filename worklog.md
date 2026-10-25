@@ -208,3 +208,24 @@ Stage Summary:
 - Login sorunu canlıda çözülmüş durumda
 - Harita düzeltmesi GitHub'da; yayına alınması için bir redeploy daha gerekiyor
   (veya Git bağlanırsa bağlantı anında ccd4aba deploy edilir)
+
+---
+Task ID: 7
+Agent: main-agent
+Task: Vercel Git bağlantısı ve deployment kaynak repo düzenlemesi
+
+Work Log:
+- Browser testi (agent-browser): login 200, ilk sayaç 6 görev, İzmir seçimi 2 görev,
+  "Türkiye'ye Dön" sonrası 2 görev kaldı → deploy'da ESKİ kod teyit edildi
+- Kullanıcının yeni PAT'i de Armagedon-24 hesabında çıktı (API /user doğrulandı),
+  private hakanvarlik24hv-ai/benimicinyap'a erişemiyor
+- Vercel Git bağlantısı kullanıcı tarafından hakanvarlik24hv-ai/benimicinyap
+  (private) reposuna yapılmış; deploy Ready ama eski Initial commit kodu
+- Strateji değişikliği: Vercel'i Armagedon-24/benimicinyap'a bağlamak
+- Güncel kod (map fix ccd4aba dahil, sonraki checkpoint ba5f53c) Armagedon-24'e
+  push edildi (ccd4aba..ba5f53c)
+
+Stage Summary:
+- Kullanıcıdan kalan: Vercel Git → Disconnect → Vercel App'i Armagedon-24
+  hesabına install edip benimicinyap'ı seç → Connect → otomatik deploy
+- Ardından canlı harita testi tekrarlanacak
