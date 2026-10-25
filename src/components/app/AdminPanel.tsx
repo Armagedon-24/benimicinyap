@@ -751,7 +751,7 @@ export default function AdminPanel() {
                       <Slider
                         value={[commissionMode === 'percentage' ? commissionRate : commissionRate * 10]}
                         min={commissionMode === 'percentage' ? 1 : 1}
-                        max={commissionMode === 'percentage' ? 30 : 100}
+                        max={commissionMode === 'percentage' ? 30 : 500}
                         step={1}
                         onValueChange={(v) => setCommissionRate(commissionMode === 'percentage' ? v[0] : v[0] / 10)}
                         className="py-2"
@@ -1053,6 +1053,23 @@ export default function AdminPanel() {
                           <p className="italic leading-relaxed">{task.evidenceDescription || 'Kanıt açıklaması yok.'}</p>
                           {task.evidenceLocation && (
                             <p className="text-[10px] text-muted-foreground">Konum: {task.evidenceLocation}</p>
+                          )}
+                          {task.aiCheckVerdict && (
+                            <div className={`flex items-center gap-2 p-2 rounded-md border text-[11px] ${
+                              task.aiCheckVerdict === 'human'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                                : task.aiCheckVerdict === 'ai_suspected'
+                                  ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                                  : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+                            }`}>
+                              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                              <span className="font-semibold">
+                                Yapay Zeka Taraması: {task.aiCheckVerdict === 'human' ? 'İnsan Yapımı' : task.aiCheckVerdict === 'ai_suspected' ? 'AI Üretimi Şüphesi' : 'Belirsiz'} (%{Math.round(task.aiCheckScore || 0)})
+                              </span>
+                            </div>
+                          )}
+                          {task.aiCheckReason && (
+                            <p className="text-[10px] text-muted-foreground leading-relaxed">{task.aiCheckReason}</p>
                           )}
                           {task.evidencePhoto && (
                             <div className="mt-1">

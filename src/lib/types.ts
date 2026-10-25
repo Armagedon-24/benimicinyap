@@ -43,6 +43,11 @@ export interface Task {
   disputeReason?: string;
   disputeResult?: string;
   disputedAt?: string;
+  aiCheckVerdict?: string; // human | ai_suspected | unclear
+  aiCheckScore?: number;
+  aiCheckReason?: string;
+  aiCheckSignals?: string;
+  aiCheckedAt?: string;
   createdAt: string;
   updatedAt: string;
   // Joined fields

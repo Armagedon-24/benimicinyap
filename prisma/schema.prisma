@@ -58,6 +58,11 @@ model Task {
   evidenceLocation    String?
   disputeReason       String?
   disputedAt          String?
+  aiCheckVerdict      String?  // human | ai_suspected | unclear
+  aiCheckScore        Float?   // 0-100 human-made confidence
+  aiCheckReason       String?
+  aiCheckSignals      String?  // JSON string array
+  aiCheckedAt         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -102,6 +102,13 @@ export default function TaskDetailModal() {
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
 
+  // Cancel states
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // AI proof check states
+  const [aiRerunning, setAiRerunning] = useState(false);
+
   // Admin Edit & Delete states
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -515,6 +522,84 @@ export default function TaskDetailModal() {
       toast.error('Bağlantı hatası');
     } finally {
       setDisputeLoading(false);
+    }
+  };
+
+  const handleCancelTask = async () => {
+    if (!currentUser || !task) return;
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateTask(task.id, { status: 'cancelled' });
+        addNotification({
+          id: crypto.randomUUID(),
+          userId: task.requesterId,
+          title: 'Görev İptal Edildi',
+          message: `"${task.title}" görevi iptal edildi. Escrow'daki ${formatTL(task.fee)} tutarındaki ödeme cüzdanınıza iade edildi.`,
+          type: 'warning',
+          read: false,
+          createdAt: new Date().toISOString(),
+        });
+        if (task.assignedToId) {
+          addNotification({
+            id: crypto.randomUUID(),
+            userId: task.assignedToId,
+            title: 'Görev İptal Edildi ❌',
+            message: `"${task.title}" görevi işveren tarafından iptal edildi.`,
+            type: 'warning',
+            read: false,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        addLog(`Görev iptal edildi & escrow iade edildi: ${task.title}`);
+        toast.success(`Görev iptal edildi. ${formatTL(task.fee)} escrow'dan cüzdanınıza iade edildi.`);
+        setCancelOpen(false);
+        fetchTaskDetail();
+        refetchTasks();
+        // refresh wallet balances
+        try {
+          const meRes = await fetch('/api/auth/me');
+          const meData = await meRes.json();
+          if (meData.success && meData.user) {
+            updateCurrentUser(meData.user);
+          }
+        } catch { /* silent */ }
+      } else {
+        toast.error(data.message || 'Görev iptal edilemedi');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const handleReRunAiCheck = async () => {
+    if (!task) return;
+    setAiRerunning(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/ai-check`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const v = data.task?.aiCheckVerdict;
+        const s = data.task?.aiCheckScore;
+        if (v === 'human') toast.success(`Tarama tamamlandı: İnsan yapımı (%${Math.round(s)} güven)`);
+        else if (v === 'ai_suspected') toast.error(`Tarama tamamlandı: Yapay zeka şüphesi (%${Math.round(s)} insan güveni)`);
+        else toast.warning(`Tarama tamamlandı: Belirsiz (%${Math.round(s)})`);
+        fetchTaskDetail();
+      } else {
+        toast.error(data.message || 'Tarama başlatılamadı');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    } finally {
+      setAiRerunning(false);
     }
   };
 
@@ -1151,6 +1236,51 @@ export default function TaskDetailModal() {
                 </div>
               )}
 
+              {/* Cancel Task (for requester/admin on active tasks) */}
+              {(isRequester || isAdmin) && ['pending', 'assigned', 'in_progress'].includes(displayTask.status) && (
+                <div className="space-y-2 p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                  {!cancelOpen ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4" />
+                          Görevi İptal Et
+                        </p>
+                        <p className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">
+                          Escrow'daki {formatTL(displayTask.fee)} tutarındaki ödeme cüzdanınıza tam olarak iade edilir.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="shrink-0 gap-1.5"
+                        onClick={() => setCancelOpen(true)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        İptal Et
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-300">Görevi iptal etmek istediğinize emin misiniz?</p>
+                      <p className="text-xs text-red-600/90 dark:text-red-400/90 leading-relaxed">
+                        "{displayTask.title}" görevi iptal edilecek ve escrow hesabındaki <span className="font-bold">{formatTL(displayTask.fee)}</span> bloke tutarı cüzdanınıza geri yüklenecektir.
+                        {displayTask.assignedToName && ` Görevli (${displayTask.assignedToName}) bilgilendirilecektir.`} Bu işlem geri alınamaz.
+                      </p>
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="outline" onClick={() => setCancelOpen(false)} disabled={cancelLoading}>
+                          Vazgeç
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={handleCancelTask} disabled={cancelLoading}>
+                          {cancelLoading && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                          Evet, İptal Et & İade Al
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Complete Task / Deliver (for assignee) */}
               {isAssignee && (displayTask.status === 'assigned' || displayTask.status === 'in_progress') && (
                 <div className="space-y-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border">
@@ -1182,6 +1312,13 @@ export default function TaskDetailModal() {
                         <Camera className="w-3.5 h-3.5" />
                         {evidencePhoto ? 'Fotoğraf Değiştir' : 'Fotoğraf Çek (Simüle)'}
                       </Button>
+                      <Input
+                        type="url"
+                        placeholder="veya kanıt URL'si yapıştırın (/proof/...)"
+                        className="text-[10px] h-7 mt-1"
+                        value={evidencePhoto}
+                        onChange={(e) => setEvidencePhoto(e.target.value)}
+                      />
                       {evidencePhoto && (
                         <p className="text-[10px] text-green-600 truncate mt-1">✓ Fotoğraf eklendi</p>
                       )}
@@ -1218,6 +1355,10 @@ export default function TaskDetailModal() {
                     )}
                     Görevi Bitir ve Teslim Et
                   </Button>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    Kanıtlarınız teslimde otomatik yapay zeka taramasından geçer; kamera/EXIF verisi ve metin özgünlüğü incelenir.
+                  </p>
                 </div>
               )}
 
@@ -1259,6 +1400,96 @@ export default function TaskDetailModal() {
                         </div>
                       )}
                     </div>
+
+                    {/* AI Proof Authenticity Check */}
+                    {displayTask.aiCheckVerdict ? (
+                      <div className={`p-3 rounded-lg border space-y-2 ${
+                        displayTask.aiCheckVerdict === 'human'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+                          : displayTask.aiCheckVerdict === 'ai_suspected'
+                            ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+                            : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
+                      }`}>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            {displayTask.aiCheckVerdict === 'human' ? (
+                              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                            ) : displayTask.aiCheckVerdict === 'ai_suspected' ? (
+                              <ShieldAlert className="w-5 h-5 text-red-600" />
+                            ) : (
+                              <Info className="w-5 h-5 text-amber-600" />
+                            )}
+                            <span className={`text-xs font-bold ${
+                              displayTask.aiCheckVerdict === 'human'
+                                ? 'text-emerald-700 dark:text-emerald-300'
+                                : displayTask.aiCheckVerdict === 'ai_suspected'
+                                  ? 'text-red-700 dark:text-red-300'
+                                  : 'text-amber-700 dark:text-amber-300'
+                            }`}>
+                              Yapay Zeka Taraması:{' '}
+                              {displayTask.aiCheckVerdict === 'human'
+                                ? 'İnsan Yapımı ✓'
+                                : displayTask.aiCheckVerdict === 'ai_suspected'
+                                  ? 'Yapay Zeka Üretimi Şüphesi ⚠'
+                                  : 'Belirsiz — Manuel İnceleme'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                              displayTask.aiCheckVerdict === 'human'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                : displayTask.aiCheckVerdict === 'ai_suspected'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                            }`}>
+                              %{Math.round(displayTask.aiCheckScore || 0)} insan güveni
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-[10px] gap-1"
+                              onClick={handleReRunAiCheck}
+                              disabled={aiRerunning}
+                            >
+                              {aiRerunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                              Yeniden Tara
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-muted-foreground">{displayTask.aiCheckReason}</p>
+                        {(() => {
+                          try {
+                            const sigs = JSON.parse(displayTask.aiCheckSignals || '[]') as string[];
+                            if (!sigs.length) return null;
+                            return (
+                              <details className="text-[10px] text-muted-foreground">
+                                <summary className="cursor-pointer font-semibold">Teknik sinyaller ({sigs.length})</summary>
+                                <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                                  {sigs.map((s, i) => <li key={i}>{s}</li>)}
+                                </ul>
+                              </details>
+                            );
+                          } catch { return null; }
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-slate-400" />
+                          Kanıt henüz yapay zeka taramasından geçmedi.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 text-[10px] gap-1"
+                          onClick={handleReRunAiCheck}
+                          disabled={aiRerunning}
+                        >
+                          {aiRerunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 text-amber-600" />}
+                          Şimdi Tara
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {!disputeOpen ? (
@@ -1343,6 +1574,19 @@ export default function TaskDetailModal() {
                     <p className="font-semibold text-red-600">İtiraz Gerekçesi:</p>
                     <p className="italic">{displayTask.disputeReason || 'Belirtilmedi'}</p>
                   </div>
+                </div>
+              )}
+
+              {/* Cancelled Info */}
+              {displayTask.status === 'cancelled' && (
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 space-y-2">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                    <X className="w-5 h-5" />
+                    <span className="font-semibold text-sm">Görev İptal Edildi</span>
+                  </div>
+                  <p className="text-xs text-red-600/90 dark:text-red-400/90 leading-relaxed">
+                    Bu görev iptal edildi. Escrow'da blokeli {formatTL(displayTask.fee)} tutarındaki ödeme işverenin cüzdanına <span className="font-semibold">tam olarak iade edildi</span> (komisyon kesintisi yapılmadı). İşlem geçmişinde bu iade "İptal İadesi" kaydı olarak tutulmaktadır.
+                  </p>
                 </div>
               )}
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCommissionSettings, calculateCommission } from "@/lib/commission";
 import { requireUser } from "@/lib/security";
+import { runAiProofCheck } from "@/lib/ai-proof-check";
 
 export async function GET(
   request: NextRequest,
@@ -332,6 +333,26 @@ export async function PATCH(
             status: "completed",
           },
         });
+      }
+    }
+
+    // If task is being delivered, run the AI proof authenticity check automatically
+    if (status === "delivered" && (evidenceDescription !== undefined || evidencePhoto !== undefined)) {
+      try {
+        await runAiProofCheck(task.id);
+      } catch (aiErr) {
+        console.error("AI proof check failed (non-blocking):", aiErr);
+        await db.task
+          .update({
+            where: { id: task.id },
+            data: {
+              aiCheckVerdict: "unclear",
+              aiCheckScore: 50,
+              aiCheckReason: "Yapay zeka taraması çalıştırılamadı, manuel inceleme önerilir.",
+              aiCheckedAt: new Date().toISOString(),
+            },
+          })
+          .catch(() => {});
       }
     }
 

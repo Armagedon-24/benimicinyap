@@ -74,3 +74,28 @@ Stage Summary:
 - Tum finansal akis hatasiz calisiyor: escrow bloke -> teklif -> kabul (fiyat duzeltmeli) -> teslim -> onay -> komisyonlu odeme -> cekim ucretli cekim
 - 11 transaction kaydi tutarli; platform geliri 100₺
 - Stale localStorage session bug'i kalici olarak duzeltildi
+
+---
+Task ID: 4
+Agent: Z.ai Main Agent (iptal/iade + komisyon testleri + AI kanıt kontrolü)
+Task: İptal/iade akışı testi, komisyon ayarları (flat mod, farklı oranlar) testi ve kanıt sistemine yapayzeka tespiti eklenmesi
+
+Work Log:
+- BUG FIX: UI'da iptal butonu hiç yoktu (API'de cancelled→iade akışı vardı ama erişilemiyordu). TaskDetailModal'a işveren/admin için "Görevi İptal Et" bölümü eklendi (onay dialogu + escrow iade bilgisi) + "Görev İptal Edildi" bilgi kartı
+- AI KANIT TARAMASI (yeni): src/lib/ai-proof-check.ts — hibrit tespit: (1) görsel indirme + exifr ile EXIF analizi (kamera/lens/çekim tarihi/GPS), (2) ham byte + XMP/C2PA AI imza taraması (dall-e, openai, midjourney, stable diffusion, c2pa, jumbf, trainedalgorithmicmedia...), (3) stok URL tespiti, (4) z-ai LLM ile metin özgünlüğü + sinyalleri birleştiren nihai karar (human/ai_suspected/unclear + 0-100 insan güveni skoru)
+- Schema: Task modeline aiCheckVerdict/aiCheckScore/aiCheckReason/aiCheckSignals/aiCheckedAt alanları eklendi (db push)
+- API: delivered PATCH'inde otomatik tarama (hata olursa non-blocking "unclear" fallback) + POST /api/tasks/[id]/ai-check manuel tarama endpoint'i (işveren/admin)
+- UI: işveren delivered görünümünde renkli AI tarama kartı (rozet + skor + gerekçe + teknik sinyaller açılır liste + Yeniden Tara), teslim formunda AI tarama bilgilendirmesi + kanıt URL girişi, AdminPanel uyuşmazlık kartında AI rozeti
+- AdminPanel: flat mod slider limiti 100→500 (50₺'ye kadar sabit komisyon seçilebilmesi için)
+- TEST 1 (iptal/iade): Hakan 800₺ görev → escrow 8500→7700/2000→2800 → iptal → tam iade 7700→8500/2800→2000, admin_adjust 800₺ "İptal İadesi", task=cancelled ✓
+- TEST 2 (flat 25₺): admin 600₺ görev → elif teslim (human-proof.jpg: Canon EOS 90D EXIF + GPS 36.88/30.70 + samimi metin) → AI: human %85 → onay → escrow_release 575₺ (fee=25), platform_commission 25₺, elif 6200→6775 ✓
+- TEST 3 (%5 + min): 150₺ görev → %5=7.5₺ < min 10₺ → 10₺ kesildi, mehmet 4500→4640 ✓ (ai_suspected %18 default stok foto+robotik metin tespiti, işveren yine de onaylayabildi)
+- TEST 4 (C2PA AI görsel): ai-proof-c2pa.png (simüle OpenAI C2PA/XMP imzalı) → AI: ai_suspected %10; sinyaller: dall-e, openai, c2pa, trainedalgorithmicmedia imzaları + EXIF silinmiş ✓
+- TEST 5 (dispute→iade): şüpheli teslime (%18) işveren itiraz → admin Uyuşmazlık Çözümü'nde AI rozeti görüldü → "İptal Et & İşverene İade Et" → 600₺ admin'e iade, escrow 0, admin_adjust kaydı ✓
+- Not: dev server prisma db push sonrası restart edildi (eski PrismaClient yeni alanları bilmiyordu); test görselleri public/proof/ altında (human-proof.jpg, ai-proof.png, ai-proof-c2pa.png); komisyon ayarları test sonrası %10 percentage varsayılana alındı
+
+Stage Summary:
+- İptal/iade akışı hem UI hem API doğrulandı: escrow tam iade + admin_adjust kaydı + bildirimler
+- Komisyon sistemi flat mod ve min/max sınırlarıyla uçtan uca doğrulandı
+- Kanıt sistemine yapayzeka tespiti eklendi: EXIF/kamera verisi, C2PA/AI imzaları, stok URL ve LLM metin analizi birleşik karar veriyor; işveren onay öncesi AI rozetini görüyor
+- lint temiz, dev.log temiz; tüm finansal kayıtlar DB ile tutarlı
