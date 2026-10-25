@@ -352,3 +352,49 @@ Stage Summary:
 - Hakkında sayfası ziyaretçi + kullanıcı erişiminde açık; amacı net anlatıyor
 - Mesaj panosu → admin İletişim Kutusu'na düşüyor; sadece admin görebiliyor
 - Hover efektinde yükselme + kenarlardan mavi renk sızmı artık kesin uygulanıyor
+
+---
+Task ID: 12
+Agent: main-agent
+Task: Mesajlara e-posta bildirimi + Hakkında sayfasına SSS bölümü
+
+Work Log:
+- Kullanıcı isteği (veya'lı): mesajlara e-posta bildirimi VEYA hakkınızda
+  sayfasına SSS bölümü — ikisi birden uygulandı
+- E-POSTA BİLDİRİMİ: nodemailer@10.2.1 eklendi; src/lib/email.ts oluşturuldu —
+  SMTP env ile yapılandırma (SMTP_HOST/PORT/USER/PASS/SECURE, EMAIL_FROM,
+  NOTIFY_EMAIL, EMAIL_NOTIFY_CONTACT/EMAIL_NOTIFY_MESSAGES=0 ile kapatılabilir);
+  sendMailSafe() asla hata fırlatmaz, yapılandırma yoksa graceful no-op
+- Akış 1: /api/contact POST → ContactMessage kaydı sonrası NOTIFY_EMAIL'e
+  HTML bildirim (reply-to=gönderen, yönlü HTML layout); yanıt emailNotified alanı
+- Akış 2: /api/messages POST → alıcının DB'deki e-postasına bildirim
+  (gönderen adı, görev başlığı, mesaj gövdesi); kendi kendine mesajda atlanır
+- DEPLOY.md'ye "E-posta bildirimleri (opsiyonel)" env tablosu + Gmail app
+  password notu eklendi
+- YEREL E2E (scripts/smtp-sink.py aiosmtpd :1025 + test-email-notify.sh):
+  contact → hakan_varlik24@hotmail.com'a e-posta yakalandı (govde "Ayse Test" ✓),
+  task-t1 mesajı → elif@gmail.com'a yakalandı (Hakan Varlık + Bornova başlığı +
+  mesaj gövdesi quoted-printable decode ile ✓); SMTP env OLMADAN contact
+  success:true + emailNotified:false (graceful) ✓
+- SSS BÖLÜMÜ: AboutPage.tsx'e "Sıkça Sorulan Sorular (SSS)" kartı eklendi
+  (Özellikler ile Bize Ulaşın arasında) — shadcn Accordion (single collapsible),
+  8 soru: escrow güvencesi, komisyon, güvenilirlik, AI teslim doğrulama, ödeme
+  zamanı, uyuşmazlık, ücretsiz üyelik, mesaj/e-posta bildirimi; altında Bize
+  Ulaşın yönlendirmesi; HelpCircle ikonu, glass-card tasarım, koyu tema uyumlu
+- UI E2E (scripts/test-sss-ui.sh): SSS başlık + 8 soru DOM'da VAR; ilk soru
+  tıklamada ACIK:true + cevap metni görünüyor; tek-açık davranışı doğrulandı
+  (soru1 false | soru3 true); screenshot download/sss-accordion-acik.png
+- Aksaklık notu: accordion tetikleyicisi ekran altındayken mouse koordinatı
+  viewport dışına düşüyor — scrollIntoView({block:'center'}) sonrası koordinat
+  alınması gerekiyor (test desene eklendi)
+- Commit d8495f0 push edildi; deploy READY → benimicinyap-two.vercel.app
+- Canlı doğrulama: contact success:true + emailNotified:false (Vercel'de SMTP
+  env henüz yok — graceful ✓); Hakkında'da SSS VAR, tüm sorular VAR, accordion
+  açılıyor + cevap görünüyor (download/live-sss-acik.png)
+
+Stage Summary:
+- İletişim formu mesajları ve görev içi mesajlar artık e-posta ile bildirilebiliyor:
+  Vercel'e SMTP env değişkenleri eklenince kod değişikliği gerektirmeden aktif olur
+- SMTP yoksa sistem sessizce çalışmaya devam eder — form/mesaj akışı asla bozulmaz
+- Hakkında sayfasında 8 soruluk interaktif SSS bölümü canlıda; tasarım mevcut
+  glass-card diliyle tutarlı
