@@ -65,3 +65,8 @@ tool-results/
 .zscripts/*.png
 .zscripts/dev.pid
 tool-results/
+
+# android twa build (keystore ASLA repoya girmemeli)
+/android-twa/
+/android/
+*.keystore

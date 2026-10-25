@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.benimicinyap.app",
+    "sha256_cert_fingerprints": [
+      "71:BB:E0:D4:6B:CB:8E:48:A9:E4:E9:F1:AF:13:FB:20:72:84:6F:8C:43:56:CA:39:9C:50:2B:73:62:2E:AE:28"
+    ]
+  }
+}]

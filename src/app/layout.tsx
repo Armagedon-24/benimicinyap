@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -108,6 +109,10 @@ export default function RootLayout({
           {children}
           <Toaster />
         </ThemeProvider>
+        {/* PWA service worker kaydi — TWA/Play & tarayici kurulumlari icin */}
+        <Script id="sw-register" strategy="afterInteractive">
+          {`if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function() {}); }); }`}
+        </Script>
       </body>
     </html>
   );
