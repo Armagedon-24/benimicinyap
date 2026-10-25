@@ -54,3 +54,6 @@ server.log
 /skills/
 .vercel
 .env*
+
+# tool results (env artifacts)
+tool-results/

@@ -61,7 +61,6 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
   const cityPolygonsRef = useRef<any[]>([]);
   const leafletRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
-  const refLayerRef = useRef<any>(null);
   const { theme } = useTheme();
 
   const { currentUser, addLog } = useAppStore();
@@ -87,13 +86,6 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
         ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
         : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
     );
-    if (refLayerRef.current) {
-      refLayerRef.current.setUrl(
-        isDark
-          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
-          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
-      );
-    }
   }, [theme]);
 
   const activeOnlyTasks = useMemo(() => {
@@ -193,18 +185,8 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
       ).addTo(map);
       tileLayerRef.current = tileLayer;
 
-      // Reference layer for city & province labels
-      const refLayer = L.tileLayer(
-        isDarkInit
-          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
-          : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-        {
-          maxZoom: 16,
-          pane: 'overlayPane',
-          zIndex: 350,
-        }
-      ).addTo(map);
-      refLayerRef.current = refLayer;
+      // Not: Şehir/il isimleri haritada gösterilmez (Reference tile katmanı kaldırıldı).
+      // İl isimleri yalnızca fare ilgili ilin üzerine gelince bilgi balonu olarak görünür.
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -257,6 +239,14 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
           const cityName = feature?.properties?.name;
           if (!cityName) return;
           const cityGeo = turkeyCitiesGeo.find((c) => normalizeName(c.name) === normalizeName(cityName));
+
+          // İl ismi bilgi balonu: imleç ilin üzerindeyken görünür, çekilince kaybolur
+          layer.bindTooltip(cityName, {
+            direction: 'top',
+            sticky: true,
+            className: 'city-name-tooltip',
+            offset: [0, -6],
+          });
 
           layer.on({
             mouseover: (e: any) => {
@@ -708,6 +698,29 @@ export default function TurkeyMap({ tasks, onCitySelect, onTaskClick, selectedCi
         }
         .city-tooltip-clean::before {
           border-top-color: white !important;
+        }
+        /* İl ismi bilgi balonu (hover tooltip) */
+        .city-name-tooltip {
+          background: white !important;
+          border: 1px solid #e2e8f0 !important;
+          border-radius: 8px !important;
+          padding: 3px 10px !important;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.14) !important;
+          font-family: inherit !important;
+          font-size: 12px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+        .city-name-tooltip::before {
+          border-top-color: white !important;
+        }
+        .dark .city-name-tooltip {
+          background: #0f172a !important;
+          border-color: #334155 !important;
+          color: #f1f5f9;
+        }
+        .dark .city-name-tooltip::before {
+          border-top-color: #0f172a !important;
         }
         .task-marker-label {
           background: transparent !important;
