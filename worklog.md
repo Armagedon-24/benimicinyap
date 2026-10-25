@@ -398,3 +398,60 @@ Stage Summary:
 - SMTP yoksa sistem sessizce çalışmaya devam eder — form/mesaj akışı asla bozulmaz
 - Hakkında sayfasında 8 soruluk interaktif SSS bölümü canlıda; tasarım mevcut
   glass-card diliyle tutarlı
+
+---
+Task ID: 13
+Agent: main-agent
+Task: Kod/dosya temizliği + güvenlik açıklarını kapatma + hız optimizasyonu + deploy
+
+Work Log:
+- DOSYA TEMİZLİĞİ (152 dosya değişikliği):
+  - .github/agents/: 59 alakasız agent tanım dosyası repodan silindi
+  - 25 kullanılmayan shadcn UI bileşeni + hooks/use-toast.ts silindi
+    (alert, avatar, calendar, carousel, chart, checkbox, collapsible, command,
+    context-menu, drawer, form, hover-card, input-otp, menubar, navigation-menu,
+    pagination, popover, radio-group, resizable, sidebar, toast, toaster, toggle,
+    toggle-group — kullanım taramasıyla sistematik belirlendi)
+  - 23 kullanılmayan npm bağımlılığı kaldırıldı (bun remove): @dnd-kit/*,
+    @hookform/resolvers, @mdxeditor/editor, @tanstack/react-query|react-table,
+    @reactuses/core, cmdk, date-fns, embla-carousel-react, input-otp, next-auth,
+    next-intl, react-day-picker, react-hook-form, react-markdown,
+    react-resizable-panels, react-syntax-highlighter, react-leaflet, uuid, vaul, zod
+  - download/*.png + analiz artefaktları, .zscripts/*.png + dev.pid git takibinden
+    çıkarıldı (diskte kaldı); .gitignore güncellendi + mükerrer kayıtlar
+- GÜVENLİK:
+  - KRİTİK: paytr callback'te 'sandbox_key_here' placeholder fallback → repo kaynağını
+    okuyan biri geçerli imza üretebilirdi; iyzico'da gerçek sandbox anahtarları
+    hardcoded → ikisi de kaldırıldı, env-only + FAIL-CLOSED (env yoksa 503,
+    callback onaylayamaz) — forge testi: 503 ✓ (yerel + canlı)
+  - CSP header eklendi (default-src 'self', img-src https: tile'lar için,
+    frame-ancestors 'none', object-src 'none', base-uri/form-action 'self')
+  - typescript.ignoreBuildErrors: true → false: build artık tip hatalarında
+    duruyor; 4 gerçek tip hatası düzeltildi (exifr options cast, Date cast,
+    ZAI private ctor cast, nodemailer Transporter type import) +
+    tsconfig exclude'e skills/scratch/mini-services/.zscripts eklendi
+  - Mevcut korumalar doğrulandı: admin/seed/wallet oturumsuz 401, normal
+    kullanıcı admin'e 403, login rate-limit, cookie httpOnly+secure+sameSite
+- HIZ:
+  - Cache header'ları: /proof/* 1 gün, logo/favicon/og-image 1 hafta,
+    manifest.json 1 saat (/icons immutable zaten vardı)
+  - Mevcut optimizasyonlar teyit edildi: tüm ağır bileşenler dynamic import,
+    optimizeCss, optimizePackageImports, compress, poweredByHeader kapalı
+  - Ana sayfa client JS'i lazy chunk'lara bölünmüş (leaflet/recharts ağır
+    chunk'ları sadece ilgili sayfada iniyor); API sorgularında N+1 yok
+- DOĞRULAMA:
+  - bun run build: tip kontrolü dahil temiz (✓ Compiled + ✓ Generating 24/24)
+  - Yerel E2E (scripts/test-hardening.sh): CSP/X-Frame VAR, 401/403 matrisi
+    doğru, paytr forge 503, contact+tasks+login çalışıyor
+  - CSP × harita (scripts/test-csp-map.sh): 12/12 tile yüklü, 81 il poligonu
+  - Commit 4d246e4 push; deploy READY → benimicinyap-two.vercel.app
+  - Canlı: CSP VAR, paytr forge 503, admin 401, login 200, tasks 6 görev,
+    canlı harita 12/12 tile (download/live-hardening-harita.png)
+
+Stage Summary:
+- Repo 120+ artefakt dosyasından arındı; 23 bağımlılık + 25 ölü bileşen kaldırıldı
+- Ödeme callback'leri fail-closed: kimlik bilgisi env'de yoksa sahte onay üretilemez
+  (kapanan en kritik açık); kaynak kodda artık hiçbir hardcoded credential yok
+- Build artık TypeScript hatasıyla yayına çıkamaz; CSP + cache header'ları canlıda
+- AUTH_SECRET hâlâ Vercel env'inde tanımlı değil: fallback anahtar kullanılıyor
+  (logda uyarı var) — üretim güvenliği için Vercel'e AUTH_SECRET eklenmesi önerilir
