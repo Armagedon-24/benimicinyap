@@ -15,8 +15,14 @@ export async function POST(request: NextRequest) {
       return new NextResponse("Fail: Missing parameters", { status: 400 });
     }
 
-    const merchantKey = process.env.PAYTR_MERCHANT_KEY || 'sandbox_key_here';
-    const merchantSalt = process.env.PAYTR_MERCHANT_SALT || 'sandbox_salt_here';
+    // Hash anahtarları yalnızca env'den okunur — placeholder fallback YOKTUR.
+    // Fallback olsaydı repo kaynağını okuyan biri geçerli imza üretebilirdi (kritik açık).
+    const merchantKey = process.env.PAYTR_MERCHANT_KEY;
+    const merchantSalt = process.env.PAYTR_MERCHANT_SALT;
+    if (!merchantKey || !merchantSalt) {
+      console.error("PayTR callback: PAYTR_MERCHANT_KEY/SALT tanimli degil — fail-closed");
+      return new NextResponse("Fail: Provider not configured", { status: 503 });
+    }
 
     // Verify hash: merchant_oid + merchant_salt + status + total_amount
     const hashStr = `${merchantOid}${merchantSalt}${status}${totalAmount}`;

@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { IyzicoClient, IyzicoLocale } from "@/lib/iyzico";
+import { securityEvent } from "@/lib/security";
 
-const iyzicoClient = new IyzicoClient({
-  apiKey: process.env.IYZICO_API_KEY || 'sandbox-tA3W5w07hO3U71XyYfFh4H7m6R54B7C9',
-  secretKey: process.env.IYZICO_SECRET_KEY || 'sandbox-w1W73yD2Yp1H5gH7eD3P5rC1fS94N7B9',
-  uri: process.env.IYZICO_BASE_URL || 'https://sandbox-api.iyzipay.com'
-});
+// Kimlik bilgileri yalnızca env'den okunur — kaynak kodda asla tutulmaz.
+// Eksikse callback fail-closed çalışır (ödeme onaylanamaz).
+const iyzicoClient = process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY
+  ? new IyzicoClient({
+      apiKey: process.env.IYZICO_API_KEY,
+      secretKey: process.env.IYZICO_SECRET_KEY,
+      uri: process.env.IYZICO_BASE_URL || "https://sandbox-api.iyzipay.com",
+    })
+  : null;
 
 export async function POST(request: NextRequest) {
   try {
+    if (!iyzicoClient) {
+      await securityEvent("iyzico_callback_rejected", "IYZICO_API_KEY/SECRET tanimli degil — fail-closed");
+      return NextResponse.redirect(new URL("/?payment=failed&reason=payment_provider_not_configured", request.url));
+    }
+
     const formData = await request.formData();
     const token = formData.get("token");
 

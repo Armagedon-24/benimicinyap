@@ -5,11 +5,15 @@ import { IyzicoClient, IyzicoLocale, IyzicoCurrency, IyzicoPaymentGroup, IyzicoB
 import crypto from "crypto";
 import { requireUser } from "@/lib/security";
 
-const iyzicoClient = new IyzicoClient({
-  apiKey: process.env.IYZICO_API_KEY || 'sandbox-tA3W5w07hO3U71XyYfFh4H7m6R54B7C9',
-  secretKey: process.env.IYZICO_SECRET_KEY || 'sandbox-w1W73yD2Yp1H5gH7eD3P5rC1fS94N7B9',
-  uri: process.env.IYZICO_BASE_URL || 'https://sandbox-api.iyzipay.com'
-});
+// Kimlik bilgileri yalnızca env'den okunur — kaynak kodda asla tutulmaz.
+// Eksikse ödeme başlatma adımı erken reddedilir (fail-closed).
+const iyzicoClient = process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY
+  ? new IyzicoClient({
+      apiKey: process.env.IYZICO_API_KEY,
+      secretKey: process.env.IYZICO_SECRET_KEY,
+      uri: process.env.IYZICO_BASE_URL || "https://sandbox-api.iyzipay.com",
+    })
+  : null;
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +64,12 @@ export async function POST(request: NextRequest) {
       const userIp = request.headers.get("x-forwarded-for")?.split(",")[0] || request.headers.get("x-real-ip") || "85.105.105.105";
 
       if (provider === "iyzico") {
+        if (!iyzicoClient) {
+          return NextResponse.json(
+            { success: false, message: "Ödeme sağlayıcısı yapılandırılmamış. Lütfen yönetici ile iletişime geçin." },
+            { status: 503 }
+          );
+        }
         const iyziRequest = {
           locale: IyzicoLocale.TR,
           conversationId: transaction.id,

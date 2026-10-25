@@ -9,7 +9,8 @@ const nextConfig: NextConfig = {
     "/**": ["./db/custom.db"],
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // Tip hataları artık build'i bloklar (güvenlik/kalite: hatalı kod yayınlanamaz)
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
   compress: true,
@@ -51,6 +52,21 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=31536000; includeSubDomains",
           },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https:",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join("; "),
+          },
         ],
       },
       {
@@ -58,6 +74,20 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
+      },
+      {
+        // Kanıt görselleri: 1 gün cache
+        source: "/proof/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400" }],
+      },
+      {
+        // Kimlik/ikon statikleri: 1 hafta cache
+        source: "/:file(logo.svg|favicon.ico|og-image.png)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
+      },
+      {
+        source: "/manifest.json",
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600" }],
       },
     ];
   },

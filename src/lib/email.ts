@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 
 /**
  * E-posta bildirim altyapısı (SMTP tabanlı, env ile yapılandırılır).
@@ -25,7 +26,7 @@ export interface MailOptions {
   replyTo?: string;
 }
 
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 let cachedConfigKey = "";
 
 function smtpConfig() {
@@ -47,7 +48,7 @@ export function isEmailConfigured(): boolean {
   return Boolean(cfg.host && cfg.user && cfg.pass);
 }
 
-function getTransporter(): nodemailer.Transporter | null {
+function getTransporter(): Transporter | null {
   if (!isEmailConfigured()) return null;
   const cfg = smtpConfig();
   const key = `${cfg.host}|${cfg.port}|${cfg.user}|${cfg.secure}`;

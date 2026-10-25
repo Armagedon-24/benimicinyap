@@ -108,7 +108,7 @@ async function analyzeExif(buffer: Buffer): Promise<{ signals: string[]; hasCame
   let hasCamera = false;
   let hasGps = false;
   try {
-    const exif = (await exifr.parse(buffer, { gps: false, tiff: true, exif: true, ifd0: true })) as Record<string, unknown> | undefined;
+    const exif = (await exifr.parse(buffer, { gps: false, tiff: true, exif: true, ifd0: true } as any)) as Record<string, unknown> | undefined;
     if (exif) {
       const make = exif.Make as string | undefined;
       const model = exif.Model as string | undefined;
@@ -122,7 +122,7 @@ async function analyzeExif(buffer: Buffer): Promise<{ signals: string[]; hasCame
         signals.push(`Kamera bilgisi mevcut: ${[make, model].filter(Boolean).join(" ")}${lens ? ` (lens: ${lens})` : ""}`);
       }
       if (dateTaken) {
-        signals.push(`Çekim tarihi meta verisi: ${new Date(dateTaken).toISOString().slice(0, 16).replace("T", " ")}`);
+        signals.push(`Çekim tarihi meta verisi: ${new Date(dateTaken as string | number).toISOString().slice(0, 16).replace("T", " ")}`);
       }
       if (swLower) {
         const aiSw = AI_SIGNATURES.find((s) => swLower.includes(s));
@@ -255,8 +255,9 @@ export async function runAiProofCheck(taskId: string): Promise<AiCheckResult | n
   try {
     // Vercel'de .z-ai-config dosyası yoktur; ZAI_CONFIG ortam değişkeni
     // (JSON: {"baseUrl": "...", "apiKey": "..."}) varsa onunla istemci kurulur.
-    const zai = process.env.ZAI_CONFIG
-      ? new (ZAI as unknown as new (cfg: { baseUrl: string; apiKey: string }) => InstanceType<typeof ZAI>)(JSON.parse(process.env.ZAI_CONFIG))
+    const ZaiCtor = ZAI as unknown as new (cfg: { baseUrl: string; apiKey: string }) => any;
+    const zai: any = process.env.ZAI_CONFIG
+      ? new ZaiCtor(JSON.parse(process.env.ZAI_CONFIG))
       : await ZAI.create();
     const completion = await zai.chat.completions.create({
       messages: buildLlmPrompt(task.title, task.description || "", proofText, signals),

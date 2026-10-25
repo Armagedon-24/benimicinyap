@@ -38,6 +38,10 @@
   ],
   "exclude": [
     "node_modules",
-    "examples"
+    "examples",
+    "skills",
+    "scratch",
+    "mini-services",
+    ".zscripts"
   ]
 }

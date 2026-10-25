@@ -57,3 +57,11 @@ server.log
 
 # tool results (env artifacts)
 tool-results/
+
+# test cikti gorselleri ve analiz artefaktlari (repo disi)
+/download/*.png
+/download/*.js
+/download/*.json
+.zscripts/*.png
+.zscripts/dev.pid
+tool-results/
