@@ -101,6 +101,10 @@ export default function AdminPanel() {
   const [maxWithdrawFee, setMaxWithdrawFee] = useState(100);
   const [withdrawFeeEnabled, setWithdrawFeeEnabled] = useState(true);
 
+  // AI approval guard settings
+  const [aiBlockEnabled, setAiBlockEnabled] = useState(true);
+  const [aiBlockThreshold, setAiBlockThreshold] = useState(30);
+
   const formatTL = (amount: number) =>
     new Intl.NumberFormat('tr-TR').format(amount) + ' ₺';
 
@@ -159,6 +163,8 @@ export default function AdminPanel() {
     if (m['min_withdraw_fee'] !== undefined) setMinWithdrawFee(parseFloat(m['min_withdraw_fee']));
     if (m['max_withdraw_fee'] !== undefined) setMaxWithdrawFee(parseFloat(m['max_withdraw_fee']));
     if (m['withdraw_fee_enabled'] !== undefined) setWithdrawFeeEnabled(m['withdraw_fee_enabled'] === 'true');
+    if (m['ai_block_enabled'] !== undefined) setAiBlockEnabled(m['ai_block_enabled'] !== 'false');
+    if (m['ai_block_threshold'] !== undefined) setAiBlockThreshold(parseFloat(m['ai_block_threshold']) || 0);
   };
 
   useEffect(() => {
@@ -223,6 +229,8 @@ export default function AdminPanel() {
         { key: 'min_withdraw_fee', value: String(minWithdrawFee) },
         { key: 'max_withdraw_fee', value: String(maxWithdrawFee) },
         { key: 'withdraw_fee_enabled', value: String(withdrawFeeEnabled) },
+        { key: 'ai_block_enabled', value: String(aiBlockEnabled) },
+        { key: 'ai_block_threshold', value: String(aiBlockThreshold) },
       ];
       const res = await fetch('/api/admin/settings', {
         method: 'PUT',
@@ -871,6 +879,44 @@ export default function AdminPanel() {
                           </div>
                         </div>
                       </>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* AI Onay Güvenliği */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        AI Onay Güvenliği (Kanıt Taraması)
+                      </h4>
+                      <Switch
+                        checked={aiBlockEnabled}
+                        onCheckedChange={setAiBlockEnabled}
+                        className="data-[state=checked]:bg-emerald-600"
+                      />
+                    </div>
+                    {aiBlockEnabled && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Onay Engelleme Eşiği: %{aiBlockThreshold} insan güveni</Label>
+                          <span className="text-xs font-medium text-emerald-600">
+                            %{aiBlockThreshold} altı teslimde işveren "onaylayamaz"
+                          </span>
+                        </div>
+                        <Slider
+                          value={[aiBlockThreshold]}
+                          min={0}
+                          max={100}
+                          step={5}
+                          onValueChange={(v) => setAiBlockThreshold(v[0])}
+                          className="py-2"
+                        />
+                        <p className="text-[10px] leading-relaxed text-muted-foreground">
+                          Teslimde otomatik AI taraması insan güveni skoru üretir (0-100). Skor bu eşiğin altındaysa işverenin onay butonu kilitlenir ve API'de 403 ile reddedilir; yönetici uyuşmazlık panelinden override edebilir.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </CardContent>

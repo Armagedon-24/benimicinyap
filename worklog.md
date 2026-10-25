@@ -99,3 +99,26 @@ Stage Summary:
 - Komisyon sistemi flat mod ve min/max sınırlarıyla uçtan uca doğrulandı
 - Kanıt sistemine yapayzeka tespiti eklendi: EXIF/kamera verisi, C2PA/AI imzaları, stok URL ve LLM metin analizi birleşik karar veriyor; işveren onay öncesi AI rozetini görüyor
 - lint temiz, dev.log temiz; tüm finansal kayıtlar DB ile tutarlı
+
+---
+Task ID: 5
+Agent: Z.ai Main Agent (AI onay engelleyici + gerçek dosya yükleme)
+Task: AI skorunu otomatik onay engelleyici yapmak (%30 altı "onaylayamazsın" kuralı) ve kanıt fotoğrafına gerçek dosya yükleme ekleme
+
+Work Log:
+- src/lib/ai-guard.ts oluşturuldu: ai_block_enabled / ai_block_threshold PlatformSetting'lerini okuyan (30sn cache) isApprovalBlockedByAi() — skor < eşik ise işveren onayı engellenir; tarama yoksa fail-open; admin hakem bypass'ı route'ta
+- Seed'e set-15 (ai_block_enabled=true) ve set-16 (ai_block_threshold=30) eklendi; canlı DB'ye scripts/add-ai-settings.ts ile upsert edildi (toplam 16 ayar)
+- /api/tasks/[id] PATCH: status=completed için sunucu tarafı AI guard (skor<eşik → 403 blocked:true + gerekçe, securityEvent 'ai_approval_blocked' loglanır); ayrıca DURUM MAKİNESİ koruması: onay yalnızca delivered (işveren) / delivered|disputed (admin) durumundan yapılabilir (aksi halde 409)
+- /api/tasks/[id] GET yanıtı aiGuard{enabled,threshold,blocked,reason,score} alanlarıyla genişletildi (UI engelli durumu render etmesi için)
+- /api/upload/proof POST (yeni): multipart gerçek dosya yükleme; JPEG/PNG/WebP, max 10MB, magic-byte imza doğrulaması (sahte dosya → 415 + 'proof_upload_rejected' güvenlik logu), dosya public/uploads/proofs/ altına UUID isimle kaydedilir (EXIF korunur — AI taraması orijinal meta veriyle çalışır)
+- TaskDetailModal: teslim formunda gerçek dosya yükleme butonu (yükleme spinner'ı, önizleme + kaldır, EXIF bilgilendirmesi; simüle çekim ikincil butona indirildi, URL girişi korundu); işveren teslim görünümünde skor<eşik ise kırmızı "Onaylayamazsınız — AI Güvenlik Kuralı Devrede" paneli + "Onay Engellendi (AI Skoru)" disabled butonu + yönlendirme metni (Yeniden Tara / gerçek fotoğraf isteme / İtiraz / admin override)
+- AdminPanel Gelir Sistemi: "AI Onay Güvenliği" kartı (anahtar switch + 0-100 eşik slider + açıklama); handleSaveSettings payload'una iki anahtar eklendi; settings PUT clearAiGuardCache() çağırıyor
+- TEST (API, scripts/test-ai-guard.sh + test-ai-guard-b2.sh): sahte JPEG 415 ✓, 11MB 413 ✓, oturumsuz 401 ✓, gerçek EXIF'li JPEG yükleme+statik servis 200 ✓; Görev A: AI-imzalı PNG teslim → ai_suspected %7 → işveren onayı 403 ENGELLENDİ ✓ → admin override tamamlandı, %10 komisyon (60₺) kesildi ✓; Görev B2: gerçek dosya → human %85 → onay 200, 450₺+20 komisyonlu aktarım ✓; teslimsiz onay 409 ✓
+- TEST (browser): mehmet teslim formundan human-proof.jpg'yi tarayıcı üzerinden gerçek yükledi → otomatik tarama human %85 (DB doğrulandı) → elif görünümünde "Onayla" aktif → UI'dan onay → görev tamamlandı + değerlendirme modalı; elif'te Görev C (%18) için kırmızı engel paneli + disabled buton screenshot alındı
+- Ekran görüntüleri: download/ai-blocked-approval.png, download/proof-upload-preview.png, download/proof-delivered-tasker.png, download/ai-human-approvable.png
+- Not: test sırasında dev-server hot-recompile'ı bir teslim PATCH'inde geçici 500 (boş body) üretti; bu, mevcut "assigned→completed atlama" açığını görünür kıldı ve durum makinesi korumasıyla kalıcı kapatıldı
+
+Stage Summary:
+- AI insan güveni skoru artık otomatik onay engelleyici: %30 altı (admin ayarlanabilir) teslimlerde işveren onaylayamıyor — hem UI hem API'de zorunlu, güvenlik logu tutuluyor, admin hakem override'ı çalışıyor
+- Kanıt fotoğrafı artık gerçek dosya olarak yükleniyor: tip/boyut/imza doğrulamalı, EXIF korunarak saklanıyor ve AI taraması orijinal dosya üzerinden yüksek güven (%85) üretiyor
+- Onay yalnızca delivered/disputed durumundan yapılabiliyor; tüm finansal kayıtlar (escrow, komisyon, iade) DB ile tutarlı; lint ve dev.log temiz

@@ -28,6 +28,7 @@ import {
   Zap,
   Info,
   Trash2,
+  Upload,
   Edit3,
   Save,
 } from 'lucide-react';
@@ -109,6 +110,14 @@ export default function TaskDetailModal() {
   // AI proof check states
   const [aiRerunning, setAiRerunning] = useState(false);
 
+  // AI approval guard ("onaylayamazsın" kuralı)
+  const [aiGuard, setAiGuard] = useState<{ enabled: boolean; threshold: number; blocked: boolean; reason: string; score: number | null } | null>(null);
+
+  // Real file upload states
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Admin Edit & Delete states
   const [adminEditMode, setAdminEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -132,6 +141,7 @@ export default function TaskDetailModal() {
         setFullTask(data.task);
         setBids(data.task.bids || []);
         setMessages(data.task.messages || []);
+        setAiGuard(data.aiGuard || null);
       }
 
       // Also fetch bids separately for latest
@@ -344,6 +354,43 @@ export default function TaskDetailModal() {
     fetchTaskDetail();
   };
 
+  const MAX_PROOF_FILE_MB = 10;
+
+  const handleProofFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const okTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!okTypes.includes(file.type)) {
+      toast.error('Yalnızca JPEG, PNG veya WebP fotoğraf yükleyebilirsiniz');
+      return;
+    }
+    if (file.size > MAX_PROOF_FILE_MB * 1024 * 1024) {
+      toast.error(`Dosya çok büyük (${(file.size / 1024 / 1024).toFixed(1)} MB). En fazla ${MAX_PROOF_FILE_MB} MB.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload/proof', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        setEvidencePhoto(data.url);
+        setUploadedFileName(file.name);
+        toast.success(`Kanıt fotoğrafı yüklendi (${(data.size / 1024).toFixed(0)} KB) — EXIF verisi korunuyor`);
+      } else {
+        toast.error(data.message || 'Dosya yüklenemedi');
+      }
+    } catch {
+      toast.error('Dosya yüklenirken bağlantı hatası');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const simulatePhotoCapture = () => {
     const urls = [
       'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=600',
@@ -408,6 +455,7 @@ export default function TaskDetailModal() {
         setCompleteProof('');
         setEvidencePhoto('');
         setEvidenceLocation('');
+        setUploadedFileName('');
         fetchTaskDetail();
         refetchTasks();
       } else {
@@ -1301,16 +1349,38 @@ export default function TaskDetailModal() {
                   
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">Kanıt Fotoğrafı</Label>
+                      <Label className="text-xs">Kanıt Fotoğrafı (Gerçek Dosya)</Label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleProofFileSelect}
+                      />
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="w-full text-xs gap-1.5 h-9"
+                        className="w-full text-xs gap-1.5 h-9 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        {uploading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                        )}
+                        {uploading ? 'Yükleniyor...' : 'Dosyadan Yükle (JPEG/PNG/WebP)'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-[10px] gap-1.5 h-7 text-muted-foreground"
                         onClick={simulatePhotoCapture}
                       >
-                        <Camera className="w-3.5 h-3.5" />
-                        {evidencePhoto ? 'Fotoğraf Değiştir' : 'Fotoğraf Çek (Simüle)'}
+                        <Camera className="w-3 h-3" />
+                        Hızlı Çekim (Simüle)
                       </Button>
                       <Input
                         type="url"
@@ -1319,8 +1389,29 @@ export default function TaskDetailModal() {
                         value={evidencePhoto}
                         onChange={(e) => setEvidencePhoto(e.target.value)}
                       />
-                      {evidencePhoto && (
-                        <p className="text-[10px] text-green-600 truncate mt-1">✓ Fotoğraf eklendi</p>
+                      {evidencePhoto ? (
+                        <div className="mt-1 space-y-1">
+                          <div className="relative rounded-md overflow-hidden border aspect-video max-h-28">
+                            <img
+                              src={evidencePhoto}
+                              alt="Kanıt önizleme"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              className="absolute top-1 right-1 p-1 rounded-full bg-red-600/90 text-white hover:bg-red-700"
+                              onClick={() => { setEvidencePhoto(''); setUploadedFileName(''); }}
+                              title="Fotoğrafı kaldır"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {uploadedFileName && (
+                            <p className="text-[10px] text-green-600 truncate">✓ {uploadedFileName}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground mt-1">Gerçek fotoğraf yüklemek EXIF/kamera verisini korur ve AI taramasında yüksek güven sağlar.</p>
                       )}
                     </div>
 
@@ -1493,26 +1584,46 @@ export default function TaskDetailModal() {
                   </div>
 
                   {!disputeOpen ? (
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                        onClick={handleApproveDelivery}
-                        disabled={completeLoading}
-                      >
-                        {completeLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        <Check className="w-3.5 h-3.5" />
-                        Onayla (Ödemeyi Serbest Bırak)
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="gap-1.5"
-                        onClick={() => setDisputeOpen(true)}
-                      >
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        İtiraz Et
-                      </Button>
+                    <div className="space-y-2 pt-2">
+                      {aiGuard?.blocked && (
+                        <div className="p-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 space-y-1.5">
+                          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                            <ShieldAlert className="w-4 h-4" />
+                            <span className="text-xs font-bold">Onaylayamazsınız — AI Güvenlik Kuralı Devrede</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-red-700 dark:text-red-300/90">{aiGuard.reason}</p>
+                          <p className="text-[10px] leading-relaxed text-muted-foreground">
+                            Seçenekler: "Yeniden Tara" ile skoru tekrar ölçün, görevliye kanıtı gerçek fotoğrafla yeniden yüklemesini isteyin veya "İtiraz Et" ile hakem heyetine başvurun. Yönetici, panel üzerinden onayı zorla gerçekleştirebilir (override).
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={handleApproveDelivery}
+                          disabled={completeLoading || aiGuard?.blocked}
+                          title={aiGuard?.blocked ? 'AI taraması bu teslimin onayına izin vermiyor' : undefined}
+                        >
+                          {completeLoading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : aiGuard?.blocked ? (
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          {aiGuard?.blocked ? 'Onay Engellendi (AI Skoru)' : 'Onayla (Ödemeyi Serbest Bırak)'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="gap-1.5"
+                          onClick={() => setDisputeOpen(true)}
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          İtiraz Et
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5">

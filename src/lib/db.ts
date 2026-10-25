@@ -224,6 +224,8 @@ export async function initStore() {
         { id: 'set-12', key: 'platform_name', value: 'Benim İçin Yap', label: 'Platform Adı', type: 'string', group: 'general', createdAt: n, updatedAt: n },
         { id: 'set-13', key: 'platform_earning_visible', value: 'true', label: 'Platform Geliri Görünür', type: 'boolean', group: 'general', createdAt: n, updatedAt: n },
         { id: 'set-14', key: 'map_default_bounds', value: '[[35.5, 25.5], [42.5, 45.0]]', label: 'Harita Varsayılan Sınırları', type: 'string', group: 'general', createdAt: n, updatedAt: n },
+        { id: 'set-15', key: 'ai_block_enabled', value: 'true', label: 'AI Skor Onay Engelleme Aktif', type: 'boolean', group: 'security', createdAt: n, updatedAt: n },
+        { id: 'set-16', key: 'ai_block_threshold', value: '30', label: 'AI Onay Engelleme Eşiği (% insan güveni)', type: 'number', group: 'security', createdAt: n, updatedAt: n },
       ]
     });
 

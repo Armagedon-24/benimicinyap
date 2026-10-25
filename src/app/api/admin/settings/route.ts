@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { clearSettingsCache } from "@/lib/commission";
+import { clearAiGuardCache } from "@/lib/ai-guard";
 import { requireAdmin } from "@/lib/security";
 
 export async function GET(request: NextRequest) {
@@ -50,6 +51,7 @@ export async function PUT(request: NextRequest) {
     }
 
     clearSettingsCache();
+    clearAiGuardCache();
     return NextResponse.json({ success: true, settings: updated });
   } catch (error) {
     console.error("Settings PUT error:", error);

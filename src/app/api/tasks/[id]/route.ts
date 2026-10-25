@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { getCommissionSettings, calculateCommission } from "@/lib/commission";
 import { requireUser } from "@/lib/security";
 import { runAiProofCheck } from "@/lib/ai-proof-check";
+import { isApprovalBlockedByAi, getAiGuardSettings } from "@/lib/ai-guard";
+import { securityEvent } from "@/lib/security";
 
 export async function GET(
   request: NextRequest,
@@ -76,7 +78,20 @@ export async function GET(
       return NextResponse.json({ success: false, message: "Bu görevin detaylarına erişim yok" }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, task });
+    // Expose AI approval guard info so the UI can render the blocked state
+    const guardSettings = await getAiGuardSettings();
+    const guard = await isApprovalBlockedByAi(task);
+    return NextResponse.json({
+      success: true,
+      task,
+      aiGuard: {
+        enabled: guardSettings.blockEnabled,
+        threshold: guardSettings.blockThreshold,
+        blocked: guard.blocked,
+        reason: guard.reason,
+        score: guard.score,
+      },
+    });
   } catch (error) {
     console.error("Task detail GET error:", error);
     return NextResponse.json(
@@ -124,6 +139,46 @@ export async function PATCH(
     }
     if (status === "completed" && task.requesterId !== auth.user!.id && auth.user!.role !== "admin") {
       return NextResponse.json({ success: false, message: "Görevi yalnızca işveren veya yönetici tamamlayabilir" }, { status: 403 });
+    }
+
+    // STATE MACHINE GUARD:
+    // Onay (completed) yalnızca teslim edilmiş bir görevden yapılabilir.
+    // İşveren: yalnızca "delivered" durumundan. Yönetici (hakem): "delivered" veya "disputed" durumundan.
+    if (status === "completed") {
+      const isAdmin = auth.user!.role === "admin";
+      const allowedPrev = isAdmin ? ["delivered", "disputed"] : ["delivered"];
+      if (!allowedPrev.includes(task.status)) {
+        return NextResponse.json(
+          { success: false, message: isAdmin
+            ? `Görev "${task.status}" durumunda; onay yalnızca delivered veya disputed görevlerine uygulanabilir.`
+            : `Görev henüz teslim edilmedi (durum: ${task.status}). Onay yalnızca teslimden sonra yapılabilir.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    // AI PROOF GUARD ("onaylayamazsın" kuralı):
+    // İşveren, insan güveni skoru eşik altında olan bir teslimi ONAYLAYAMAZ.
+    // Yönetici (admin) hakem rolüyle bu kuralı bypass edebilir.
+    if (status === "completed" && auth.user!.role !== "admin") {
+      const guard = await isApprovalBlockedByAi(task);
+      if (guard.blocked) {
+        securityEvent(
+          "ai_approval_blocked",
+          `task=${id} score=${guard.score} threshold=${guard.threshold}`,
+          auth.user!.id
+        ).catch(() => {});
+        return NextResponse.json(
+          {
+            success: false,
+            blocked: true,
+            message: guard.reason,
+            aiCheckScore: guard.score,
+            aiBlockThreshold: guard.threshold,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const updateData: Record<string, unknown> = {};
