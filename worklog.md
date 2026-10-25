@@ -150,3 +150,21 @@ Stage Summary:
 - 7 commit yerelde hazır (temiz demo verisi dahil); push için kullanıcı PAT'i verebilir veya kendi makinesinde git push origin main çalıştırabilir
 - Serverless sınırı belgelendi: SQLite /tmp demo-grade (soğuk başlangıçta seed'e döner); kalıcı veri için Turso/Neon taşıma planı DEPLOY.md'de
 - AI analizi Vercel'de heuristic moda düşer (EXIF/C2PA çalışır); tam LLM analizi için ZAI_CONFIG env opsiyonu hazır
+
+---
+Task ID: 4
+Agent: main-agent
+Task: Kullanıcı PAT'i ile GitHub push işlemini gerçekleştirme
+
+Work Log:
+- Kullanıcı fine-grained GitHub PAT sağladı (Contents: Read&Write, benimicinyap repo)
+- Local repo doğrulandı: main dalı, çalışma dizini temiz, 7+1 commit hazır
+- 50791cd checkpoint commiti sadece worklog.md içeriyordu, push edildi
+- Tek seferlik URL-embedded token ile push yapıldı (git config'e token yazılmadı)
+- git ls-remote ile doğrulandı: refs/heads/main = 50791cd
+
+Stage Summary:
+- b11a8c9..50791cd main -> main push tamamlandı
+- Depo artık Vercel importuna hazır: https://github.com/Armagedon-24/benimicinyap
+- Kalan adım: kullanıcı vercel.com/new üzerinden import edecek
+- Kullanıcıya iş bitince PAT revoke etmesi önerildi
