@@ -1,5 +1,40 @@
 import { PrismaClient } from '@prisma/client';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * Serverless (Vercel) SQLite bootstrap:
+ * - Vercel Lambda fonksiyonlarında yalnızca /tmp yazılabilir, dosya sistemi read-only'dir.
+ * - db/custom.db lambda paketine outputFileTracingIncludes ile dahil edilir.
+ * - Soğuk başlangıçta tohum verili DB, /tmp/benimicinyap.db konumuna kopyalanır ve
+ *   DATABASE_URL bu dosyayı gösterir. PrismaClient'dan ÖNCE ayarlanmalıdır.
+ */
+function bootstrapDatabaseUrl(): void {
+  // Sunucusuz ortam tespiti: VERCEL (Vercel otomatik set eder) veya DB_FORCE_TMP
+  const isServerless = process.env.VERCEL === '1' || process.env.DB_FORCE_TMP === '1';
+  if (!isServerless) return; // lokal geliştirme: .env içindeki DATABASE_URL aynen kullanılır
+
+  const tmpDb = '/tmp/benimicinyap.db';
+  if (!fs.existsSync(tmpDb)) {
+    const bundled = path.join(process.cwd(), 'db', 'custom.db');
+    if (fs.existsSync(bundled)) {
+      try {
+        fs.copyFileSync(bundled, tmpDb);
+        console.log('[db-bootstrap] Seed DB /tmp konumuna kopyalandı:', tmpDb);
+      } catch (err) {
+        console.error('[db-bootstrap] DB kopyalama hatası:', err);
+      }
+    } else {
+      console.error('[db-bootstrap] Paketlenmiş db/custom.db bulunamadı:', bundled);
+    }
+  }
+  if (fs.existsSync(tmpDb)) {
+    process.env.DATABASE_URL = `file:${tmpDb}`;
+  }
+}
+
+bootstrapDatabaseUrl();
 
 function hashSeedPassword(password: string): string {
   const salt = crypto.createHash('sha256').update(`seed:${password}`).digest('hex').slice(0, 32);

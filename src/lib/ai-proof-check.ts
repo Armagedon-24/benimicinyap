@@ -1,5 +1,7 @@
 import exifr from "exifr";
 import ZAI from "z-ai-web-dev-sdk";
+import fs from "node:fs";
+import path from "node:path";
 import { db } from "@/lib/db";
 
 export type AiVerdict = "human" | "ai_suspected" | "unclear";
@@ -28,13 +30,49 @@ function bufferIncludes(haystack: string, needle: string): boolean {
   return haystack.includes(needle);
 }
 
+/**
+ * Yerel kanıt dosyasını doğrudan diskten okur (HTTP self-fetch'e gerek kalmaz).
+ * - /api/files/proofs/<ad> → Vercel'de /tmp/uploads/proofs, lokalde public/uploads/proofs
+ * - /uploads/proofs/<ad>   → lokal public/uploads/proofs (eski URL formatı)
+ * Vercel serverless'ta localhost self-fetch çalışmaz; diskten okumak her ortamda tutarlıdır.
+ */
+function readLocalProofFile(url: string): Buffer | null {
+  const m = url.match(/^\/(?:api\/files|uploads)\/proofs\/([A-Za-z0-9._-]+)$/);
+  if (!m) return null;
+  const name = m[1];
+  const candidates = [
+    "/tmp/uploads/proofs", // Vercel serverless
+    path.join(process.cwd(), "public", "uploads", "proofs"), // lokal statik alan
+  ];
+  for (const dir of candidates) {
+    try {
+      const p = path.join(dir, name);
+      if (fs.existsSync(p)) return fs.readFileSync(p);
+    } catch {
+      // sonraki adayı dene
+    }
+  }
+  return null;
+}
+
 async function downloadImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  // 1) Yerel dosya yolları → doğrudan diskten oku (lokal + Vercel uyumlu)
+  const local = readLocalProofFile(url);
+  if (local) {
+    const ext = path.extname(url).toLowerCase();
+    const contentType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+    return { buffer: local, contentType };
+  }
+  // 2) Harici URL'ler (stok foto vb.) → HTTP indir
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     let fetchUrl = url;
     if (url.startsWith("/")) {
-      const base = process.env.APP_BASE_URL || "http://localhost:3000";
+      const base =
+        process.env.APP_BASE_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+        "http://localhost:3000";
       fetchUrl = `${base}${url}`;
     }
     const res = await fetch(fetchUrl, { signal: controller.signal });
@@ -215,7 +253,11 @@ export async function runAiProofCheck(taskId: string): Promise<AiCheckResult | n
   let humanScore: number | null = null;
   let reason = "";
   try {
-    const zai = await ZAI.create();
+    // Vercel'de .z-ai-config dosyası yoktur; ZAI_CONFIG ortam değişkeni
+    // (JSON: {"baseUrl": "...", "apiKey": "..."}) varsa onunla istemci kurulur.
+    const zai = process.env.ZAI_CONFIG
+      ? new (ZAI as unknown as new (cfg: { baseUrl: string; apiKey: string }) => InstanceType<typeof ZAI>)(JSON.parse(process.env.ZAI_CONFIG))
+      : await ZAI.create();
     const completion = await zai.chat.completions.create({
       messages: buildLlmPrompt(task.title, task.description || "", proofText, signals),
       thinking: { type: "disabled" },

@@ -101,7 +101,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dir = path.join(process.cwd(), "public", "uploads", "proofs");
+    // Vercel serverless: yalnızca /tmp yazılabilir → dosyalar /tmp'ye yazılır,
+    // /api/files/proofs/[file] rotası üzerinden servis edilir.
+    // Lokal geliştirme: public/uploads/proofs (statik servis) aynen korunur.
+    const isServerless = process.env.VERCEL === "1" || process.env.DB_FORCE_TMP === "1";
+    const dir = isServerless
+      ? "/tmp/uploads/proofs"
+      : path.join(process.cwd(), "public", "uploads", "proofs");
     await mkdir(dir, { recursive: true });
 
     const unique = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
@@ -109,7 +115,9 @@ export async function POST(request: NextRequest) {
     const filePath = path.join(dir, fileName);
     await writeFile(filePath, buffer);
 
-    const url = `/uploads/proofs/${fileName}`;
+    const url = isServerless
+      ? `/api/files/proofs/${fileName}`
+      : `/uploads/proofs/${fileName}`;
 
     return NextResponse.json({
       success: true,

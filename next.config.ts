@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: process.cwd(),
+  // SQLite seed DB'sini Vercel lambda paketine dahil et (runtime /tmp kopyası için)
+  outputFileTracingIncludes: {
+    "/api/**": ["./db/custom.db"],
+    "/**": ["./db/custom.db"],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
