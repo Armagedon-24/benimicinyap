@@ -229,3 +229,23 @@ Stage Summary:
 - Kullanıcıdan kalan: Vercel Git → Disconnect → Vercel App'i Armagedon-24
   hesabına install edip benimicinyap'ı seç → Connect → otomatik deploy
 - Ardından canlı harita testi tekrarlanacak
+
+---
+Task ID: 8
+Agent: main-agent
+Task: Vercel token ile REST API deploy ve harita düzeltmesinin canlı doğrulaması
+
+Work Log:
+- Kullanıcı takım kapsamlı Vercel token verdi (hakans-projects-2ef29a32)
+- CLI link başarısız (takım token'ı /v2/user'a erişemiyor) → REST API yoluna geçildi
+- scripts/vercel-api-deploy.mjs yazıldı: git ls-files → /v2/files upload (sha1 dedupe)
+  → /v13/deployments (target: production, project prj_8W2hiUz...)
+- 290 dosya yüklendi (sunucuda zaten mevcuttu), deployment benimicinyap-1veqfni39 READY
+- Doğrulama: benimicinyap-two.vercel.app 200, login 200, /api/tasks 6 görev
+- Browser testi (agent-browser): 6 → İzmir 2 → Türkiye'ye Dön → 6 görev ✅ FIX CANLIDA
+
+Stage Summary:
+- Vercel deploy artık tek komut: node scripts/vercel-api-deploy.mjs <VERCEL_TOKEN>
+- Takım kapsamlı token ile API deploy çalışıyor; CLI/link gerekmiyor
+- Gelecek düzeltmeler için: kod değişikliği + commit + bu scripti çalıştırmak yeterli
+- GitHub tarafı (Armagedon-24 repo) yedek/ana kopya; deploy kaynağı artık API
