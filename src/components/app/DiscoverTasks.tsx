@@ -107,7 +107,10 @@ export default function DiscoverTasks() {
       setFilterCity(city);
       addLog(`Haritadan il seçildi: ${city}`);
     } else {
+      // "Türkiye'ye Dön" / harita sıfırlama: il filtresini de temizle ki
+      // tüm illerin görevleri yeniden yüklensin.
       setMapCityFilter(null);
+      setFilterCity('');
     }
   };
 
