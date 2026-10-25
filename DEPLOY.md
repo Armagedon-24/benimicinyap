@@ -57,6 +57,28 @@ vercel --prod
 - Tam AI analizi için Vercel → Settings → Environment Variables altına ekleyin:
   - `ZAI_CONFIG` = `{"baseUrl": "https://api.z.ai/api/paas/v4", "apiKey": "<ANAHTARINIZ>"}`
 
+### E-posta bildirimleri (opsiyonel)
+- Yapılandırılmadığında sistem sessizce çalışmaya devam eder (bildirim gönderilmez, hata oluşmaz).
+- Etkinleştirmek için Vercel → Settings → Environment Variables altına ekleyin:
+
+| Değişken | Zorunlu? | Açıklama |
+|----------|----------|----------|
+| `SMTP_HOST` | Evet | SMTP sunucusu (örn. `smtp.gmail.com`) |
+| `SMTP_PORT` | Evet | Port (`587` STARTTLS / `465` TLS) |
+| `SMTP_USER` | Evet | SMTP kullanıcı adı (genelde e-posta adresi) |
+| `SMTP_PASS` | Evet | Şifre / uygulama şifresi |
+| `SMTP_SECURE` | Hayır | `1` → 465 implicit TLS, aksi halde STARTTLS |
+| `EMAIL_FROM` | Hayır | Gönderen adresi (varsayılan: `SMTP_USER`) |
+| `NOTIFY_EMAIL` | Evet | İletişim formu bildirimlerinin gideceği yönetici adresi |
+| `EMAIL_NOTIFY_CONTACT` | Hayır | `0` → iletişim bildirimini kapatır |
+| `EMAIL_NOTIFY_MESSAGES` | Hayır | `0` → görev mesajı bildirimini kapatır |
+
+- Akış: iletişim formu mesajı → `NOTIFY_EMAIL`'e bildirim; görev içi yeni
+  mesaj → alıcının kayıtlı e-postasına bildirim. Gönderim hatası form/mesaj
+  akışını asla engellemez (yalnızca sunucu loguna yazılır).
+- Gmail kullanımı: hesapta 2 adımlı doğrulama + "Uygulama Şifresi" oluşturup
+  `SMTP_PASS` alanına uygulama şifresini girin.
+
 ### Otomatik deploy
 - Vercel, GitHub bağlantısını kurduktan sonra her `git push` için otomatik
   derleyip yayınlar (Preview + Production).

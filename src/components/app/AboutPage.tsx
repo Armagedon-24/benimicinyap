@@ -24,6 +24,7 @@ import {
   Search,
   CheckCircle2,
   Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +32,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { toast } from 'sonner';
 
 interface AboutPageProps {
@@ -103,6 +110,41 @@ const features = [
     desc: 'Anlaşmazlık halinde yönetici hakem olarak devreye girer; escrow tutarını işverene iade eder veya görevliye aktarır.',
     color: 'text-cyan-600 dark:text-cyan-400',
     bg: 'bg-cyan-100 dark:bg-cyan-900/30',
+  },
+];
+
+const faqs = [
+  {
+    q: 'Ödemem nasıl güvence altında?',
+    a: "Görevi yayınladığınızda ödediğiniz ücret anında escrow güvenlik havuzunda bloke edilir; cüzdanınızdan düşer ama karşı tarafa aktarılmaz. Görev teslim edilip sizin tarafınızdan onaylanana kadar para havuzda bekler. Görev iptal edilirse tutar tamamen cüzdanınıza iade edilir.",
+  },
+  {
+    q: 'Platform komisyonu ne kadar?',
+    a: 'Komisyon oranı platform yönetimi tarafından şeffaf biçimde belirlenir (varsayılan %10). Kesinti yalnızca görev onaylandığında görevlinin ödemesinden yapılır; işverenin ödediği tutar değişmez. Tüm kesintiler her iki tarafın cüzdan işlem geçmişinde ayrı kayıt olarak görünür.',
+  },
+  {
+    q: 'Görevlilere güvenebilir miyim?',
+    a: 'Evet. Platformdaki tüm kullanıcılar yasal mevzuat gereği T.C. kimlik numarasıyla doğrulanır; doğrulamasız görev yayımlanamaz veya teklif verilemez. Ayrıca her kullanıcının profilde görünen puanı, aldığı yorumları ve tamamladığı görev sayısı vardır — teklif vermeden önce bu bilgileri karşılaştırabilirsiniz.',
+  },
+  {
+    q: 'Görev teslimi nasıl doğrulanıyor?',
+    a: 'Görevli işi tamamladığında fotoğraf + açıklama kanıtı yükler. Yüklenen görsel yapay zeka destekli taramadan geçer: EXIF kamera verisi, çekim konumu/tarihi, C2PA/AI imzaları ve metin özgünlüğü analiz edilir. Şüpheli teslimlerde onay otomatik olarak engellenir ve uyuşmazlık yönetici hakemliğine taşınır.',
+  },
+  {
+    q: 'Param ne zaman cüzdanıma geçer?',
+    a: "İşveren teslimi onayladığı anda bloke edilen tutar, komisyon düşülerek görevlinin cüzdanına anında aktarılır. Cüzdan bakiyesinden para çekmek isteyen görevlilerde tutarın %1'i (minimum 5 ₺) çekim ücreti olarak kesilir.",
+  },
+  {
+    q: 'Anlaşmazlık olursa ne olur?',
+    a: 'İşveren teslimden memnun kalmazsa itiraz ederek uyuşmazlık süreci başlatabilir. Platform yönetici hakem olarak devreye girer; yapay zeka tarama raporunu ve kanıtları inceleyerek escrow tutarını ya işverene iade eder ya da görevliye aktarır. Karar her iki tarafın işlem geçmişine kaydedilir.',
+  },
+  {
+    q: 'Görev yayınlamak veya üye olmak ücretli mi?',
+    a: 'Hayır. Üyelik ve görev yayınlama tamamen ücretsizdir; hiçbir aylık ücret veya listeleme bedeli alınmaz. Yalnızca başarılı tamamlanan görevlerden yüzde komisyon kesilir — platform, siz kazanmadan para kazanmaz.',
+  },
+  {
+    q: 'Yeni mesaj geldiğinde haberim olur mu?',
+    a: 'Evet. Görev sayfasında size bir mesaj geldiğinde uygulamada bildirim alırsınız; ayrıca platform e-posta bildirimi yapılandırıldıysa hesabınıza kayıtlı e-posta adresine de bildirim gönderilir. İletişim formundan yazdığınız mesajlar ise yöneticiye otomatik e-posta olarak iletilir.',
   },
 ];
 
@@ -264,6 +306,43 @@ export default function AboutPage({ isGuest = false, onBackToLogin }: AboutPageP
             </motion.div>
           ))}
         </div>
+      </motion.div>
+
+      {/* SSS */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+      >
+        <Card className="glass-card rounded-xl border-slate-200/60 dark:border-white/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Sıkça Sorulan Sorular (SSS)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Platformun çalışma mantığı, ödeme güvencesi ve komisyon sistemiyle ilgili en çok merak edilenler.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {faqs.map((f, i) => (
+                <AccordionItem key={f.q} value={`sss-${i}`} className="border-slate-200/70 dark:border-white/10">
+                  <AccordionTrigger className="text-sm font-semibold text-left hover:no-underline hover:text-blue-700 dark:hover:text-blue-300 py-3.5">
+                    {f.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-xs sm:text-sm text-muted-foreground leading-relaxed pb-4">
+                    {f.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+            <p className="text-[11px] text-muted-foreground mt-4 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" />
+              Aradığınız cevabı bulamadınız mı? Aşağıdaki Bize Ulaşın formundan bize yazın, en kısa sürede dönelim.
+            </p>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* İletişim Mesaj Panosu */}

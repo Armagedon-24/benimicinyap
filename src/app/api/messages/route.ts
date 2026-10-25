@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/security";
+import { notifyNewTaskMessage } from "@/lib/email";
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,6 +81,29 @@ export async function POST(request: NextRequest) {
         negotiationStatus: negotiationStatus || undefined,
       } as any,
     });
+
+    // E-posta bildirimi: SMTP env ile yapılandırılmışsa alıcının e-postasına iletilir.
+    // Yapılandırma yoksa sessizce atlanır; hata mesaj gönderimini etkilemez.
+    try {
+      const [receiver, sender] = await Promise.all([
+        db.user.findUnique({ where: { id: receiverId }, select: { email: true, fullName: true } }),
+        db.user.findUnique({ where: { id: senderId }, select: { fullName: true } }),
+      ]);
+      if (receiver?.email && receiverId !== senderId) {
+        const mailResult = await notifyNewTaskMessage({
+          receiverEmail: receiver.email,
+          receiverName: receiver.fullName || "",
+          senderName: sender?.fullName || senderName || "Bir kullanıcı",
+          taskTitle: task.title,
+          content,
+        });
+        if (!mailResult.sent) {
+          console.warn("[messages] e-posta bildirimi atlandı/başarısız:", mailResult.error || mailResult.skipped);
+        }
+      }
+    } catch (mailErr) {
+      console.warn("[messages] e-posta bildirimi hatası:", mailErr);
+    }
 
     return NextResponse.json({ success: true, message });
   } catch (error) {

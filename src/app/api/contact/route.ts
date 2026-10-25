@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { allowRateLimit, securityEvent } from "@/lib/security";
+import { notifyAdminNewContactMessage } from "@/lib/email";
 
 // Genel iletişim mesajı: giriş gerektirmez, admin paneline düşer
 export async function POST(request: NextRequest) {
@@ -41,10 +42,21 @@ export async function POST(request: NextRequest) {
 
     await securityEvent("contact_message", `${name} <${email}> konu: ${subject || "-"}`);
 
+    // E-posta bildirimi: SMTP env ile yapılandırılmışsa yöneticiye iletilir.
+    // Yapılandırma yoksa sessizce atlanır; gönderim hatası form akışını etkilemez.
+    const mailResult = await notifyAdminNewContactMessage({ name, email, subject, message });
+    if (!mailResult.sent) {
+      console.warn(
+        "[contact] e-posta bildirimi atlandı/başarısız:",
+        mailResult.error || mailResult.skipped
+      );
+    }
+
     return NextResponse.json({
       success: true,
       message: "Mesajınız alındı! Ekibimiz en kısa sürede size dönüş yapacak.",
       id: saved.id,
+      emailNotified: mailResult.sent,
     });
   } catch (error) {
     console.error("[contact] POST error:", error);
